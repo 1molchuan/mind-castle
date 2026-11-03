@@ -1,0 +1,61 @@
+念力守城 / 意念热气球 素材来源与授权
+=====================================
+
+本游戏仅供个人学习、课堂实验和展示使用，请勿公开发布或商用。
+奶龙、美团袋鼠等是他人的商业形象，网络梗图的原作者大多不明；如需公开发布，请把这些角色替换成原创形象。
+
+一、网络原图 / 二创素材
+- 奶蛙（待机、捧腹大笑动画）：动画帧作者 liaosongjie（github.com/liaosongjie/Codex-Voice-Input，MIT），
+  GIF 由 Nailong-Studio/wallpaper（github.com/Nailong-Studio/wallpaper，MIT）整理。MIT 许可全文见下方。
+- 背手负鼠（动作图集）：github.com/claw16/codex-pet-beishoufushu（MIT）。原始照片作者不明。
+- 肥嘟嘟袋鼠（跑步图集）：github.com/inoader/codex-feidudu-pet（未声明许可）；
+  弹窗动画与配音：github.com/XIANG5556/fat-dudu-effect-extension（未声明许可）。原形象为美团袋鼠。
+- 蓝色大肥鱼 / DeepSeek 娘（动作图集）：github.com/xpy12367/codex-pet-DeepSeek-girl（未声明许可）。社区二创形象。
+- GPT 龙娘：github.com/sujiu222/gpt-dragon-girl-pet（未声明许可）。
+- Claude 娘：github.com/yuansufipa-prog/codex-pet-claude-saint（未声明许可）。
+- Gemini 猫娘：github.com/ethon2333-dotcom/gemini-codex-pet（未声明许可）。
+- 高雅人士企鹅（叉腰、滑板企鹅，以及企鹅走路 / 跳舞 / 企鹅工人 / 墨镜企鹅小弟 H3 动画的首帧）：原图为 3Dalia 上传到
+  Shutterstock 的 3D 企鹅，取自 github.com/Moeary/Penguin-Meme-Maker 收录的模板；用 rembg 抠图。
+- 小大肥鱼走路动画的首帧：取自上面 DeepSeek 娘图集的侧身帧。
+- 「迪普西克公司老板梁武谷」直播画面：网上流传的 DeepSeek 创始人肌肉男梗图（AI 恶搞图，
+  转载见 x.com/wsjack/status/2083865874671509506），原作者不明。
+- 奶龙（正面，以及 H3 动画的首帧）：第七印象出品的动画形象，原图取自
+  github.com/CristinXie/NaiwaOrNailong-dataset；用 rembg 抠图。
+
+二、AI 生成
+- MiniMax H3（开源视频模型，MiniMax H3 Community License，在 Google Colab 上运行）：以上面抠好的原图为首帧生成 5 秒视频，
+  再抽帧抠图做成动画——奶龙走路 / 打瞌睡 / 蓄力 / 哭，高雅企鹅走路 / 跳舞，企鹅工人 / 企鹅小弟走路，
+  小蓝鲸游动，小大肥鱼（DeepSeek 娘）走路，法师待机 / 施法（以原法师图为首帧），
+  法师笑场（首帧为 gpt-image-2.5 以原法师图为参考生成的笑场图）。
+- gpt-image-2.5：奶龙全身哭泣姿势（以原图为参考，用作 H3 的首帧）；小蓝鲸（H3 首帧）；四张章节背景、
+  热气球五张关卡背景、城堡、法师、热气球、云朵（全新生成）。
+
+三、音效（assets/sfx）
+- muyu.mp3 木鱼：github.com/Ares-Chang/wooden-fish（MIT）。
+- laugh.wav 奶蛙笑声：github.com/liaosongjie/Codex-Voice-Input（MIT，与奶蛙动画同源）。
+- punch / boing / drop / thud / squeak / boom / fanfare：Kenney（kenney.nl）音效包，CC0 公有领域，
+  文件取自 github.com/series-ai/jam-ready-assets 收录的副本
+  （impactPunch_medium_000、jump1、drop_002、impactSoft_heavy_000、creature4、lowFrequency_explosion_000、jingles hit_03）。
+- 闪电、DUANG、反弹、援军、胜负提示音由浏览器 Web Audio 实时合成。
+
+四、特效
+- 龙息火焰、治愈光柱、Gemini 星光与魔法阵、闪电光效都是游戏里用 Canvas 实时画的。
+
+----------------------------------------------------------------------
+MIT License（适用于奶蛙动画与笑声、背手负鼠图集、木鱼音效）
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Copyright (c) 2026 Codex Voice Input contributors（奶蛙动画帧、笑声）; Copyright (c) 2026 Morningstar202604（Nailong-Studio/wallpaper）;
+Copyright (c) 2026 CL（codex-pet-beishoufushu）; Copyright (c) 2022-PRESENT Chang（wooden-fish 木鱼音效）

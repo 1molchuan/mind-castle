@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- mind-castle-launcher：serve.ps1 靠这个标记判断端口上跑的是不是念力守城 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>脑波游戏</title>
+<link rel="icon" href="icon.ico">
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #eef2ff;
+    background: radial-gradient(circle at 30% 20%, #3b3270, #121633 70%); }
+  main { width: min(880px, 92vw); }
+  h1 { margin: 0 0 6px; font-size: 34px; }
+  p { margin: 0 0 22px; color: #b8c4e0; line-height: 1.7; }
+  .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  a.card { display: block; padding: 22px 20px; border-radius: 16px; text-decoration: none; color: inherit;
+    background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); transition: transform .15s, background .15s; }
+  a.card:hover { transform: translateY(-3px); background: rgba(255, 255, 255, .14); }
+  a.card b { display: block; font-size: 22px; margin-bottom: 8px; }
+  a.card span { color: #b8c4e0; font-size: 14px; line-height: 1.6; }
+  .main { border-color: #ffd34d; }
+  .warn { margin-top: 22px; font-size: 14px; color: #ffd34d; }
+</style>
+</head>
+<body>
+<main>
+  <h1>脑波游戏</h1>
+  <p>戴上 TGAM 脑波头环，用专注和放松来玩。没有设备也可以先点游戏里的「模拟模式」，用方向键代替脑波。</p>
+  <div class="games">
+    <a class="card main" href="mind-castle.html"><b>念力守城</b><span>越专注闪电越快，放松修城墙，四个 Boss 各有考验。</span></a>
+    <a class="card" href="calib.html"><b>脑波动作识别测试</b><span>约 3 分钟，按提示做动作并记录脑波，可导出数据分析。</span></a>
+  </div>
+  <div class="warn" id="warn"></div>
+</main>
+<script>
+  if (!('serial' in navigator)) {
+    document.getElementById('warn').textContent = '当前浏览器不支持串口，连不上脑波设备。请改用 Edge 或 Chrome 打开（Firefox 不行）。';
+  }
+</script>
+</body>
+</html>

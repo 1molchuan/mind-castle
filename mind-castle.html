@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>念力守城 · 脑波游戏</title>
+<!-- 素材来源与授权见 assets/CREDITS.txt -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; color: #fff;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+  canvas { display: block; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 10, 25, .5); }
+  .hidden { display: none !important; }
+  .card { background: rgba(18, 28, 52, .94); padding: 24px 32px; border-radius: 16px; width: min(680px, 90vw);
+    text-align: center; line-height: 1.7; box-shadow: 0 12px 40px rgba(0, 0, 0, .4); max-height: 92vh; overflow: auto; }
+  .card h1 { margin: 0 0 6px; font-size: 32px; }
+  .card h2 { margin: 0 0 10px; }
+  .card ul { text-align: left; margin: 6px 0; padding-left: 22px; }
+  .row { margin: 12px 0; }
+  select, button { font: inherit; border: 0; border-radius: 8px; padding: 6px 12px; }
+  button { background: #f5b83d; color: #222; padding: 10px 22px; margin: 6px; cursor: pointer; font-weight: bold; }
+  button.secondary { background: #4b5d85; color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+  .msg { color: #ffb4a8; min-height: 1.7em; margin: 8px 0 0; }
+  .hint { color: #b8c4e0; font-size: 14px; }
+  table { margin: 10px auto; border-collapse: collapse; }
+  td { padding: 4px 14px; border-bottom: 1px solid rgba(255, 255, 255, .12); }
+  #btnSound { position: fixed; left: 16px; bottom: 14px; padding: 6px 12px; font-size: 13px; margin: 0;
+    background: rgba(8, 14, 34, .72); color: #fff; font-weight: normal; }
+  #dudu { position: fixed; right: 24px; bottom: 16px; height: 42vh; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<video id="dudu" class="hidden" src="assets/dudu.webm" muted playsinline preload="auto"></video>
+<button id="btnSound">声音：开（M）</button>
+
+<div id="menu" class="overlay">
+  <div class="card">
+    <h1>念力守城</h1>
+    <p>怪物正在逼近城墙！<b>越专注</b>，法杖充能越快，怪物走进射程就自动放闪电（专注 ≥ 80 时每道闪电只耗半格能量）。
+      <b>放松度 ≥ 60</b> 时城墙会慢慢自我修复。法杖开局存 3 格能量，每打败一个 Boss 多 1 格，最多 5 格。</p>
+    <ul class="hint">
+      <li>闯关：三章，每章 3 波怪 + 1 个 Boss，最后迎战奶龙。无尽模式在此之后一直轮换，难度不再上涨。
+        每章的小怪跟着 Boss 走（企鹅帮 / 小蓝鲸和小大肥鱼 / 小奶蛙 / 小奶龙），Boss 关里也会不断刷小怪。</li>
+      <li>Boss 会发动"考验"：<b>高雅企鹅</b>跳舞时要把专注降下来或者放松下来，停手；<b>蓝色大肥鱼</b>深度思考时要把专注拉到 70 以上打断她（她在场时迪普西克公司老板梁武谷会封锁国外模型，援军召唤不出来）；
+        <b>奶蛙</b>狂笑时要放松下来（它会笑三次，笑的时候法师也笑场、充能减半，小奶蛙也会被传染）；<b>奶龙</b>三种都会。</li>
+      <li>援军：专注 ≥ 65 撑 6 秒召唤 <b>GPT 龙娘</b>（龙息全屏伤害，闪电射程永久变远，召唤 3 次后覆盖全屏，之后龙息伤害变成 2）；
+        放松 ≥ 65 撑 6 秒召唤 <b>Claude 娘</b>（修墙 +20；城墙离满不到 20 时直接回满，并把城墙上限 +5）；
+        专注 ≥ 80 撑 3 秒召唤 <b>Gemini 猫娘</b>（3 秒内闪电耗能减半，和专注 ≥ 80 的超能叠加，每道只耗 1/4 格）。
+        打败蓝色大肥鱼后 <b>DeepSeek 娘</b> 加入：专注 ≥ 60 时深度思考，专注降到 45 以下就发射鲸鱼，
+        每思考 1 秒 1 点伤害（最多 8 点），优先打 Boss；连续想 12 秒会服务器繁忙。</li>
+    </ul>
+    <div class="row">
+      模式 <select id="mode"><option value="campaign">闯关</option><option value="endless">无尽模式</option></select>
+      &nbsp; 波特率 <select id="baud"><option>9600</option><option>57600</option><option>115200</option></select>
+    </div>
+    <button id="btnDevice" disabled>连接脑波设备并开始</button>
+    <button id="btnDemo" class="secondary" disabled>模拟模式</button>
+    <p class="msg" id="menuMsg">素材加载中……</p>
+    <p class="hint">需要用 Edge 或 Chrome 打开（Firefox 不支持串口）。连接前先关掉串口助手和调试软件，弹窗里选 “USB-SERIAL CH340”。<br>
+      模拟模式：↑ / ↓ 调专注，← / → 调放松，Q 模拟电极脱落。游戏中按 Esc 结束。</p>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="card">
+    <h2 id="pauseTitle"></h2>
+    <p id="pauseText"></p>
+    <button id="btnPauseMenu" class="secondary">返回菜单</button>
+  </div>
+</div>
+
+<div id="result" class="overlay hidden">
+  <div class="card">
+    <h2 id="resultTitle"></h2>
+    <div id="resultBody"></div>
+    <button id="btnCsv">导出数据 CSV</button>
+    <button id="btnAgain" class="secondary">返回菜单</button>
+  </div>
+</div>
+
+<script src="assets/manifest.js"></script>
+<script>
+'use strict';
+
+// --- TGAM 协议解析 ---
+// 包格式：AA AA | 负载长度(≤169) | 负载 | 校验（负载字节和取反后的低 8 位）
+// 负载数据项：0x02 信号质量，0x04 专注度，0x05 放松度，0x80 原始波形，0x83 八个频段能量（8×3 字节，大端）
+function parsePayload(p) {
+  const out = {};
+  let i = 0;
+  while (i < p.length) {
+    while (p[i] === 0x55) i++;
+    const code = p[i++];
+    if (code >= 0x80) {
+      const n = p[i++];
+      if (code === 0x83 && n === 24) {
+        out.bands = [];
+        for (let k = i; k < i + 24; k += 3) out.bands.push((p[k] << 16) | (p[k + 1] << 8) | p[k + 2]);
+      }
+      i += n;
+    } else {
+      const v = p[i++];
+      if (code === 0x02) out.quality = v;
+      else if (code === 0x04) out.attention = v;
+      else if (code === 0x05) out.meditation = v;
+    }
+  }
+  return out;
+}
+
+function createParser(onPacket) {
+  let state = 0, len = 0, sum = 0, payload = [];
+  return bytes => {
+    for (const b of bytes) {
+      if (state === 0) state = b === 0xAA ? 1 : 0;
+      else if (state === 1) state = b === 0xAA ? 2 : 0;
+      else if (state === 2) {
+        if (b === 0xAA) continue;
+        if (b > 169) { state = 0; continue; }
+        len = b; sum = 0; payload = [];
+        state = len ? 3 : 4;
+      } else if (state === 3) {
+        payload.push(b);
+        sum += b;
+        if (payload.length === len) state = 4;
+      } else {
+        if ((~sum & 0xFF) === b) onPacket(parsePayload(payload));
+        state = 0;
+      }
+    }
+  };
+}
+
+// --- 数据来源与通用流程 ---
+const POOR_SIGNAL = 50;  // 信号质量 ≥ 该值视为接触不良（200 = 电极没接触）
+const STALE_MS = 3000;   // 超过这么久没收到数据包视为断开
+const BAND_KEYS = ['delta', 'theta', 'lowAlpha', 'highAlpha', 'lowBeta', 'highBeta', 'lowGamma', 'midGamma'];
+
+const $ = id => document.getElementById(id);
+const signal = { quality: undefined, attention: undefined, meditation: undefined, bands: null, at: 0 };
+let source = null;  // 'device' | 'demo'
+let port = null, knownPort = null, reader = null, readDone = null;
+const demo = { value: 30, med: 55, off: false, timer: 0 };
+const keys = {};
+
+function timestamp() {
+  const d = new Date(), p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+}
+
+function show(id) {
+  for (const o of ['menu', 'pause', 'result']) $(o).classList.toggle('hidden', o !== id);
+}
+
+const menuMsg = s => { $('menuMsg').textContent = s; };
+
+function handlePacket(pk, from) {
+  if (from !== source) return;
+  // 57600 模式下每秒还有 512 个只含原始波形的小包，这里只用汇总包
+  if (pk.quality === undefined && pk.attention === undefined && pk.meditation === undefined) return;
+  Object.assign(signal, pk);
+  signal.at = performance.now();
+  if (game.phase !== 'menu' && game.phase !== 'done') record();
+}
+
+async function connectDevice() {
+  if (!('serial' in navigator)) return menuMsg('当前浏览器不支持串口，请用 Edge 或 Chrome 打开本文件。');
+  let p;
+  try {
+    p = knownPort || await navigator.serial.requestPort();
+    await p.open({ baudRate: Number($('baud').value) });
+  } catch (e) {
+    knownPort = null;
+    if (e.name === 'NotFoundError') return menuMsg('没有选择串口。');
+    return menuMsg(`打开串口失败：${e.message}。请确认串口助手、调试软件已关闭，再试一次。`);
+  }
+  knownPort = port = p;
+  readDone = readLoop(p);
+  startGame('device');
+}
+
+async function readLoop(p) {
+  const parse = createParser(pk => handlePacket(pk, 'device'));
+  while (p === port && p.readable) {
+    reader = p.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        parse(value);
+      }
+    } catch (e) {
+      // 帧错误等可恢复错误会换一个新的 readable，继续读；拔掉设备时 readable 变成 null，循环结束
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
+async function closeDevice() {
+  if (!port) return;
+  const p = port;
+  port = null;
+  await reader?.cancel().catch(() => {});
+  await readDone;
+  await p.close().catch(() => {});
+}
+
+function startDemo() {
+  clearInterval(demo.timer);
+  Object.assign(demo, { value: 30, med: 55, off: false });
+  demo.timer = setInterval(() => {
+    const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+    const jitter = () => (Math.random() - 0.5) * 14;
+    const bands = BAND_KEYS.map(() => Math.round(Math.random() * 60000));
+    handlePacket(demo.off
+      ? { quality: 200, attention: 0, meditation: 0, bands }
+      : { quality: 0, attention: clamp(demo.value + jitter()), meditation: clamp(demo.med + jitter()), bands }, 'demo');
+  }, 1000);
+  startGame('demo');
+}
+
+async function returnToMenu() {
+  game.phase = 'menu';
+  clearInterval(demo.timer);
+  source = null;
+  await closeDevice();
+  show('menu');
+}
+
+function exportCsv() {
+  const cols = Object.keys(game.rows[0]);
+  const lines = [cols.join(','), ...game.rows.map(r => cols.map(c => r[c]).join(','))];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv' }));
+  a.download = `念力守城-${game.rows[0].time.slice(0, 19).replace(/[: ]/g, '-')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+let pauseKey = '';
+function setPauseText(stale) {
+  const key = stale ? 'stale' : `poor${signal.quality}`;
+  if (key === pauseKey) return;
+  pauseKey = key;
+  $('pauseTitle').textContent = stale ? '没有收到脑波数据，游戏暂停' : '电极接触不好，游戏暂停';
+  $('pauseText').innerHTML = stale
+    ? '请检查：头带开关是否打开、电量是否充足、接收器指示灯是否常亮、波特率是否选对（你的设备是 9600）。'
+    : `当前信号质量 ${signal.quality}（0 最好，200 表示电极没接触）。<br>` +
+      '用湿纸巾擦一下额头和耳垂，把耳夹夹紧，信号恢复后自动继续。';
+}
+
+// 信号差或断开时暂停，恢复后自动继续
+function updatePause(now) {
+  if (game.phase !== 'playing' && game.phase !== 'paused') return;
+  const stale = now - signal.at > STALE_MS;
+  const poor = signal.quality !== undefined && signal.quality >= POOR_SIGNAL;
+  if (stale || poor) {
+    setPauseText(stale);
+    if (game.phase === 'playing') { game.phase = 'paused'; show('pause'); }
+  } else if (game.phase === 'paused') {
+    game.phase = 'playing';
+    pauseKey = '';
+    show(null);
+  }
+}
+
+// --- 素材与音效 ---
+const SPR = {}, BG = {};
+let assetsReady = false;
+
+function loadImage(src) {
+  return new Promise((ok, fail) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => fail(new Error(src));
+    img.src = src;
+  });
+}
+
+async function loadAssets() {
+  if (!window.ASSETS) throw new Error('找不到 assets/manifest.js');
+  const jobs = [];
+  for (const [name, m] of Object.entries(ASSETS.sprites)) jobs.push(loadImage(`assets/${name}.webp`).then(img => { SPR[name] = { ...m, img }; }));
+  for (const [name, m] of Object.entries(ASSETS.backgrounds)) jobs.push(loadImage(`assets/${name}.webp`).then(img => { BG[name] = { ...m, img }; }));
+  await Promise.all(jobs);
+}
+
+const sound = { on: true, ctx: null, voice: new Audio('assets/dudu.mp3') };
+
+function audioCtx() {
+  if (!sound.ctx) sound.ctx = new AudioContext();
+  if (sound.ctx.state === 'suspended') sound.ctx.resume();
+  return sound.ctx;
+}
+
+function tone(freq, dur, type = 'sine', vol = 0.3, slideTo = 0, delay = 0) {
+  const ac = audioCtx(), t = ac.currentTime + delay;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(t);
+  o.stop(t + dur);
+}
+
+function noise(dur, freq, vol) {
+  const ac = audioCtx(), t = ac.currentTime;
+  const buf = ac.createBuffer(1, Math.round(ac.sampleRate * dur), ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = buf;
+  f.type = 'bandpass';
+  f.frequency.value = freq;
+  g.gain.value = vol;
+  src.connect(f).connect(g).connect(ac.destination);
+  src.start(t);
+}
+
+const SFX = {
+  zap: () => noise(0.12, 3200, 0.25),
+  duang: () => tone(170, 0.5, 'sine', 0.55, 55),
+  reflect: () => tone(420, 0.22, 'square', 0.12, 160),
+  helper: () => [660, 880, 1320].forEach((f, i) => tone(f, 0.16, 'triangle', 0.18, 0, i * 0.1)),
+  fail: () => [520, 390, 260].forEach((f, i) => tone(f, 0.2, 'sawtooth', 0.1, 0, i * 0.15)),
+  win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.25, 'triangle', 0.2, 0, i * 0.13)),
+};
+
+function sfx(name) {
+  if (sound.on && sound.ctx) SFX[name]();
+}
+
+// 采样音效（assets/sfx，来源见 CREDITS.txt）：[文件, 跳过开头的秒数, 音量, 最长播放秒数]
+const SAMPLES = {
+  muyu: ['sfx/muyu.mp3', 0.06, 0.9], punch: ['sfx/punch.ogg', 0, 0.6], boing: ['sfx/boing.ogg', 0, 0.3],
+  drop: ['sfx/drop.ogg', 0, 0.8], thud: ['sfx/thud.ogg', 0, 0.8], squeak: ['sfx/squeak.ogg', 0, 0.3],
+  laugh: ['sfx/laugh.wav', 0, 0.55, 0.6], laughFull: ['sfx/laugh.wav', 0, 0.7], boom: ['sfx/boom.ogg', 0.04, 0.9],
+  fanfare: ['sfx/fanfare.ogg', 0, 0.6],
+};
+const samplePool = {};
+
+function pool(name) {
+  return samplePool[name] ??= {
+    list: Array.from({ length: 4 }, () => Object.assign(new Audio(`assets/${SAMPLES[name][0]}`), { preload: 'auto' })),
+    i: 0, last: 0,
+  };
+}
+
+function playSample(name, rate = 1) {
+  if (!sound.on) return;
+  const [, start, vol, maxDur] = SAMPLES[name], p = pool(name), now = performance.now();
+  if (now - p.last < 45) return;  // 同一瞬间连杀好几只时，同一种声音只响一次
+  p.last = now;
+  const a = p.list[p.i++ % p.list.length];
+  a.pause();
+  Object.assign(a, { currentTime: start, volume: vol, preservesPitch: false, playbackRate: rate });
+  a.play().catch(() => {});
+  clearTimeout(a.stopTimer);
+  if (maxDur) a.stopTimer = setTimeout(() => a.pause(), (maxDur * 1000) / rate);
+}
+
+function setSound(on) {
+  sound.on = on;
+  $('btnSound').textContent = `声音：${on ? '开' : '关'}（M）`;
+  if (!on) sound.voice.pause();
+}
+
+// --- 游戏规则 ---
+const WALL_MAX = 100;      // 开局城墙血量上限（Claude 娘能把上限往上加）
+const CHARGE_RATE = 1.0;   // 专注 100 时每秒充能量；充能速度与（专注/100）的平方成正比
+const START_CHARGES = 3;   // 法杖开局最多存几格能量
+const MAX_CHARGES = 5;     // 每打败一个 Boss 多一格，最多这么多格
+const RANGE = 0.8;         // 开局射程：怪物走进画面左侧 80% 才能被劈
+const GPT_FULL_RANGE = 3;  // 每召唤一次 GPT 龙娘射程永久变远，召唤这么多次后覆盖全屏
+const SUPER_AT = 80;       // 专注达到该值进入超能：每道闪电只耗半格，一次最多劈两只
+const CALM_AT = 40;        // "停手"考验：专注低于该值……
+const CALM_MED = 60;       // ……或者放松高于该值，都算停手
+const RELAX_AT = 60;       // 放松达到该值时城墙开始修复；"放松"考验的门槛
+const REPAIR_RATE = 2;     // 放松 100 时每秒修复的城墙血量
+const LEVEL_MAX = 9;       // 普通波的难度上限（闯关第 9 波）；无尽模式之后一直保持这个难度
+const HELPER_CD = 30;      // 援军召唤后的冷却秒数
+
+// sfx：死亡时在木鱼声之外再叠的音效
+const MONSTERS = {
+  gang: { name: '企鹅小弟', hp: 1, speed: 1.0, h: 3.4, damage: 3, sprite: 'gang-walk', kill: '功德 +1', sfx: 'punch' },
+  skate: { name: '滑板企鹅', hp: 1, speed: 1.7, h: 3.2, damage: 3, sprite: 'peng-skate', glide: true, kill: '功德 +1', sfx: 'punch' },
+  worker: { name: '企鹅工人', hp: 2, speed: 0.85, h: 3.5, damage: 5, sprite: 'worker-walk', kill: '下班！', sfx: 'punch' },
+  whale: { name: '小蓝鲸', hp: 1, speed: 1.0, h: 2.4, damage: 3, sprite: 'whale-swim', fly: true, kill: '功德 +1', sfx: 'drop' },
+  fish: { name: '小大肥鱼', hp: 2, speed: 0.85, h: 3.6, damage: 5, sprite: 'ds-walk', kill: '去吃白饭了', sfx: 'drop' },
+  naiwa: { name: '小奶蛙', hp: 1, speed: 1.0, h: 3.0, damage: 3, sprite: 'naiwa-idle', kill: '功德 +1', sfx: 'laugh' },
+  laughwa: { name: '狂笑奶蛙', hp: 2, speed: 0.85, h: 3.4, damage: 5, sprite: 'naiwa-laugh', kill: '蚌埠住了', sfx: 'laugh' },
+  nailong: { name: '小奶龙', hp: 1, speed: 1.0, h: 3.0, damage: 3, sprite: 'nl-walk', kill: '功德 +1', sfx: 'squeak' },
+  happylong: { name: '开心奶龙', hp: 2, speed: 0.85, h: 3.4, damage: 5, sprite: 'nl-happy', kill: '告辞', sfx: 'squeak' },
+  dudu: { name: '肥嘟嘟袋鼠', hp: 1, speed: 1.6, h: 3.3, damage: 3, sprite: 'dudu-run', hop: true, kill: '功德 +1', sfx: 'boing' },
+  fushu: { name: '背手负鼠', hp: 3, speed: 0.6, h: 3.9, damage: 8, sprite: 'fushu-idle', kill: '生活嘛，背手站着就过去了', sfx: 'thud' },
+};
+// 每章的小怪：普通 / 快速 / 两滴血 / 肉盾
+const POOLS = [
+  { basic: 'gang', fast: 'skate', mid: 'worker', tank: 'fushu' },
+  { basic: 'whale', fast: 'dudu', mid: 'fish', tank: 'fushu' },
+  { basic: 'naiwa', fast: 'dudu', mid: 'laughwa', tank: 'fushu' },
+  { basic: 'nailong', fast: 'dudu', mid: 'happylong', tank: 'fushu' },
+];
+
+// 考验：Boss 血量掉到阈值时触发，期间 Boss 停在原地、不撞墙
+const TRIALS = {
+  // 专注降下来或者放松下来都算停手，否则闪电被反弹
+  calm: { need: 3, below: CALM_AT, above: CALM_MED, test: t => game.att < t.below || game.med > t.above, reflect: true },
+  burst: { need: 3, limit: 10, atLeast: SUPER_AT, test: t => game.att >= t.atLeast },  // 限时内把专注拉高
+  relax: { need: 4, test: () => game.med >= RELAX_AT, invulnerable: true, fast: true },  // 闪电无效，放松下来才能结束
+};
+
+const BOSSES = {
+  penguin: {
+    name: '高雅人士企鹅', hp: 7, speed: 0.4, h: 8.5, damage: 4, every: 2.5, walk: 'peng-walk', waddle: true,
+    summon: 'worker', summonEvery: 20, intro: '高雅人士视察中，请保持体面',
+    trials: { calm: { sprite: 'peng-dance', title: '高雅起舞中', start: '高雅人士，起舞！', ok: '高雅人士，精神状态良好',
+      below: 50, above: 50, need: 8, hint: '跳舞时闪电会被反弹！专注低于 50 或放松高于 50，撑 8 秒，体面地停手' } },
+    order: ['calm', 'calm'],
+  },
+  dsgirl: {
+    name: '蓝色大肥鱼', hp: 14, speed: 0.42, h: 7.6, damage: 8, every: 2.5, walk: 'ds-walk', stun: 'ds-fail',
+    summon: 'whale', summonEvery: 12, summonText: '小蓝鲸出击！', intro: '吃白饭的大肥鱼来了',
+    trials: { burst: { sprite: 'ds-think', title: '深度思考中', start: '已开始深度思考……', ok: '思考被打断！',
+      atLeast: 70, hint: '专注 ≥ 70 撑 3 秒打断她，不然服务器就要繁忙了', fail: 'jam', failText: '服务器繁忙，请稍后再试' } },
+    order: ['burst', 'burst', 'burst'],
+  },
+  naiwa: {
+    name: '奶蛙', hp: 12, speed: 0.4, h: 9, damage: 7, every: 2, walk: 'naiwa-idle',
+    summon: 'naiwa', summonEvery: 10, fastSummonEvery: 5, intro: '它捧腹大笑时闪电无效，放松下来才能止住笑声',
+    trials: { relax: { sprite: 'naiwa-laugh', title: '捧腹大笑中', start: '蚌埠住了！', ok: '笑声止住了！', laugh: true,
+      chargeMul: 0.5, infect: ['naiwa', 'laughwa'],  // 法师也笑场，充能减半；笑声把小奶蛙传染成狂笑奶蛙
+      hint: `闪电无效，法师也笑场了（充能减半）！放松 ≥ ${RELAX_AT} 累计 4 秒止住它的笑` } },
+    order: ['relax', 'relax', 'relax'],
+  },
+  nailong: {
+    name: '奶龙', hp: 16, speed: 0.4, h: 8.6, damage: 8, every: 2, walk: 'nl-walk', stun: 'nl-front', waddle: true,
+    summon: 'nailong', summonEvery: 10, fastSummonEvery: 5, summonText: '我才是奶龙！', intro: '我才是奶龙！',
+    trials: {
+      calm: { sprite: 'nl-sleep', title: '装睡中', start: '我睡了，别吵', ok: '奶龙睡着了',
+        hint: `别吵醒它！专注低于 ${CALM_AT} 或放松高于 ${CALM_MED}，撑 3 秒` },
+      burst: { sprite: 'nl-happy', title: '蓄力大招', start: '奶龙要放大招了！', ok: '大招被打断！',
+        hint: `专注 ≥ ${SUPER_AT} 撑 3 秒打断它的大招！`, fail: 'duang', failText: 'DUANG！！' },
+      relax: { sprite: 'nl-cry', title: '哭了', start: '呜呜呜……', ok: '奶龙被哄好了',
+        hint: `闪电无效！放松 ≥ ${RELAX_AT} 累计 4 秒哄好它` },
+    },
+    order: ['calm', 'burst', 'relax'],
+  },
+};
+const BOSS_CYCLE = ['penguin', 'dsgirl', 'naiwa', 'nailong'];
+
+const HELPERS = [
+  { key: 'gpt', name: 'GPT 龙娘', sprite: 'gpt-wave', aura: 'fire', hold: 6, test: () => game.att >= 65, cond: '专注 ≥ 65 撑 6 秒',
+    act: () => {
+      dragonBreath();
+      const n = game.helperCalls.gpt;
+      return n < GPT_FULL_RANGE ? `龙息！闪电射程变远（${n}/${GPT_FULL_RANGE}）`
+        : n === GPT_FULL_RANGE ? '龙息！闪电射程覆盖全屏，龙息伤害 ×2' : '龙息！全屏 2 点伤害';
+    } },
+  { key: 'claude', name: 'Claude 娘', sprite: 'claude-wave', aura: 'warm', hold: 6, test: () => game.med >= 65, cond: '放松 ≥ 65 撑 6 秒',
+    blocked: 'Your account has been suspended',
+    act: () => {  // 墙缺得多就补 20；快满了就直接补满，并把上限加 5
+      const big = game.wallHp >= game.wallMax - 20;
+      addFx('heal', 2.4, { big });
+      const s = helperSpot(1);
+      float(big ? '上限 +5' : '+20', s.x + L.unit * 4.5, s.foot - s.h - L.unit * 1.5, { size: 40, life: 2, color: big ? '#ffd34d' : '#7dffa0' });
+      if (!big) {
+        game.wallHp += 20;
+        return '城墙已重构 +20';
+      }
+      game.wallHp = game.wallMax += 5;
+      return `城墙回满，上限 +5（${game.wallMax}）`;
+    } },
+  { key: 'gemini', name: 'Gemini 猫娘', sprite: 'gemini-wave', aura: 'magic', hold: 3, test: () => game.att >= SUPER_AT, cond: `专注 ≥ ${SUPER_AT} 撑 3 秒`,
+    act: () => {
+      game.boost = 3;
+      addFx('gemini', 1.2);
+      return '喵～闪电耗能减半 3 秒';
+    } },
+];
+// DeepSeek 娘：打败蓝色大肥鱼后加入。专注 ≥ 60 时深度思考，专注降到 45 以下发射鲸鱼，
+// 每思考 1 秒造成 1 点伤害（最多 8 点），优先打 Boss；连续想到 12 秒就服务器繁忙，这次白想
+const DS = { thinkAt: 60, releaseAt: 45, maxDmg: 8, busyAt: 12, fly: 0.6 };
+
+// Claude 娘被梁武谷拦下时弹出的封号通知，照搬 Claude 的原文
+const SUSPENDED = ['Hello,', 'An internal investigation of suspicious signals associated with your account indicates a violation of our '
+  + 'Usage Policy. As a result, we have revoked your access to Claude.'];
+const SUSPENDED_SHOW = 5;  // 通知显示几秒
+
+const CHAPTERS = [
+  { title: '第一章 · 高雅人士', bg: 'bg-ch1', foot: 0.84 },
+  { title: '第二章 · 深度思考', bg: 'bg-ch2', foot: 0.86 },
+  { title: '第三章 · 奶蛙之怒', bg: 'bg-ch3', foot: 0.83 },
+  { title: '终章 · 我才是奶龙', bg: 'bg-final', foot: 0.86 },
+];
+
+// 关卡顺序：三章各 3 波 + Boss，再打奶龙；无尽模式之后循环「3 波 + 轮换 Boss」
+const CAMPAIGN = [];
+for (let c = 0; c < 3; c++) {
+  for (let k = 1; k <= 3; k++) CAMPAIGN.push({ kind: 'wave', n: c * 3 + k, chapter: c });
+  CAMPAIGN.push({ kind: 'boss', boss: BOSS_CYCLE[c], chapter: c });
+}
+CAMPAIGN.push({ kind: 'boss', boss: 'nailong', chapter: 3 });
+
+function stageAt(i) {
+  if (i < CAMPAIGN.length) return CAMPAIGN[i];
+  const j = i - CAMPAIGN.length, cycle = Math.floor(j / 4), boss = BOSS_CYCLE[cycle % 4], chapter = BOSS_CYCLE.indexOf(boss);
+  return j % 4 < 3 ? { kind: 'wave', n: 10 + cycle * 3 + (j % 4), chapter } : { kind: 'boss', boss, chapter };
+}
+
+const stageLabel = () => {
+  const s = game.stageInfo;
+  if (s.kind === 'boss') return `Boss · ${BOSSES[s.boss].name}`;
+  return game.mode === 'campaign' ? `第 ${s.n} / 9 波` : `第 ${s.n} 波`;
+};
+
+const game = {
+  phase: 'menu',  // menu | playing | paused | done
+  mode: 'campaign',
+  stage: 0, stageInfo: CAMPAIGN[0], chapter: 0, queue: [], spawnTimer: 0, streamTimer: 0,
+  banner: '', bannerSub: '', bannerTime: 99, monsters: [], bolts: [], particles: [], floaters: [],
+  energy: 0, cooldown: 0, att: 0, med: 0, wallHp: WALL_MAX, wallMax: WALL_MAX, shake: 0, jam: 0, boost: 0, ds: { think: 0, cd: 0, show: 0 }, whales: [], haha: 0, fx: [], glows: [], quake: 0, castT: 99,
+  kills: 0, shots: 0, bossesBeaten: [], helperCalls: {}, helpers: {}, superAt: -99, duduAt: -99, wallMarks: 0, liangT: 0, liangShout: 0, suspended: 0,
+  playTime: 0, startedAt: 0, rows: [],
+};
+
+// 普通波的难度：level 1~9，超过 9 不再上涨
+const spawnInterval = lv => (4.2 - 0.22 * (lv - 1)) / 1.5;  // 比最初快 1.5 倍
+const waveSpeed = lv => 0.035 * (1 + 0.04 * (lv - 1));  // 每秒走过的画面宽度比例
+// 每道闪电耗几格：超能减半，Gemini 加持再减半，两者叠加
+const boltCost = att => (att >= SUPER_AT ? 0.5 : 1) * (game.boost ? 0.5 : 1);
+const boltRange = () => Math.min(1, RANGE + ((game.helperCalls.gpt || 0) * (1 - RANGE)) / GPT_FULL_RANGE);
+const chargeCap = () => Math.min(MAX_CHARGES, START_CHARGES + game.bossesBeaten.length);
+const secondsPerShot = att => (att < 5 ? Infinity : boltCost(att) / (CHARGE_RATE * (att / 100) ** 2));
+// 难度等级：普通波看波数；闯关里的 Boss 关取本章最后一波的难度，无尽模式之后都按满级
+const level = () => {
+  const s = game.stageInfo;
+  if (s.kind === 'wave') return Math.min(s.n, LEVEL_MAX);
+  return game.stage < CAMPAIGN.length ? Math.min(3 * s.chapter + 3, LEVEL_MAX) : LEVEL_MAX;
+};
+const BOSS_STREAM = 8;  // Boss 关里，每 8 秒从右边刷一只本章的普通 / 快速小怪
+
+// 每波按固定比例配好各类小怪再打乱出场顺序，避免某一波随机抽到一堆负鼠
+function waveList(lv, chapter) {
+  const pool = POOLS[chapter], n = 5 + Math.round(((lv - 1) * 5) / 8);
+  const tank = lv >= 4 ? Math.round(n * (0.08 + 0.02 * (lv - 4))) : 0;  // 以下都是累计只数
+  const mid = lv >= 3 ? Math.round(n * 0.38) : tank;
+  const fast = lv >= 2 ? Math.round(n * 0.6) : mid;
+  const list = Array.from({ length: n }, (_, i) =>
+    i < tank ? pool.tank : i < mid ? pool.mid : i < fast ? pool.fast : pool.basic);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+
+function startGame(src) {
+  source = src;
+  audioCtx();  // 在点击按钮时创建，浏览器才允许出声
+  Object.assign(game, {
+    phase: 'playing', mode: $('mode').value, stage: -1, chapter: -1, queue: [], monsters: [], bolts: [], particles: [], floaters: [],
+    energy: 0, cooldown: 0, att: 0, med: 0, wallHp: WALL_MAX, wallMax: WALL_MAX, shake: 0, jam: 0, boost: 0, ds: { think: 0, cd: 0, show: 0 }, whales: [], haha: 0, fx: [], glows: [], quake: 0, castT: 99,
+    kills: 0, shots: 0, bossesBeaten: [], helperCalls: {}, superAt: -99, duduAt: -99, wallMarks: 0, liangT: 0, liangShout: 0, suspended: 0,
+    playTime: 0, startedAt: performance.now(), rows: [],
+    helpers: Object.fromEntries(HELPERS.map(h => [h.key, { hold: 0, cd: 0, show: 0 }])),
+  });
+  Object.assign(signal, { quality: undefined, attention: undefined, meditation: undefined, bands: null });
+  signal.at = performance.now();  // 给第一个数据包留出等待时间
+  nextStage();
+  menuMsg('');
+  show(null);
+}
+
+function nextStage() {
+  game.stage++;
+  const s = game.stageInfo = stageAt(game.stage);
+  const newChapter = s.chapter !== game.chapter;
+  game.chapter = s.chapter;
+  if (s.kind === 'boss') {
+    const b = BOSSES[s.boss];
+    game.queue = ['boss:' + s.boss];
+    game.spawnTimer = -2;
+    game.streamTimer = 0;
+    setBanner(`Boss · ${b.name}`, newChapter ? `${CHAPTERS[s.chapter].title}　${b.intro}` : b.intro);
+  } else {
+    game.queue = waveList(level(), s.chapter);
+    game.spawnTimer = spawnInterval(level()) - 3;  // 横幅展示 3 秒后出第一只
+    setBanner(newChapter ? CHAPTERS[s.chapter].title : stageLabel(),
+      newChapter ? `命运的齿轮开始转动　${stageLabel()}` : `${game.queue.length} 只怪物来袭`);
+  }
+}
+
+function setBanner(title, sub) {
+  Object.assign(game, { banner: title, bannerSub: sub, bannerTime: 0 });
+}
+
+function spawn(type, x = 1.05) {
+  if (type.startsWith('boss:')) {
+    const key = type.slice(5), b = BOSSES[key];
+    const thresholds = b.order.map((_, k) => Math.round((b.hp * (b.order.length - k)) / (b.order.length + 1)));
+    game.monsters.push({ type: 'boss', boss: key, x, hp: b.hp, maxHp: b.hp, walk: 0, attack: 0, lunge: 0, flash: 0,
+      seed: Math.random() * 10, summon: 0, trial: null, pending: b.order.map((kind, k) => ({ kind, at: thresholds[k] })), stun: 0 });
+  } else {
+    game.monsters.push({ type, x, hp: MONSTERS[type].hp, walk: Math.random() * 3, attack: 0, lunge: 0, flash: 0, seed: Math.random() * 10 });
+  }
+}
+
+const spec = m => (m.type === 'boss' ? BOSSES[m.boss] : MONSTERS[m.type]);
+const monH = m => spec(m).h * L.unit;
+function monW(m) {
+  const s = SPR[spriteOf(m)];
+  return s ? (monH(m) * s.w) / s.h : monH(m) * 0.6;
+}
+
+function float(text, x, y, opt = {}) {
+  game.floaters.push({ text, x, y, life: opt.life || 1.2, size: opt.size || 22, color: opt.color || '#ffe680' });
+}
+
+function burst(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 160;
+    game.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, life: 1, color, r: 2 + Math.random() * 3 });
+  }
+}
+
+function boltPath(x0, y0, x1, y1) {
+  const pts = [[x0, y0]];
+  for (let i = 1; i < 8; i++) {
+    const k = i / 8;
+    pts.push([x0 + (x1 - x0) * k + (Math.random() - 0.5) * 30, y0 + (y1 - y0) * k + (Math.random() - 0.5) * 30]);
+  }
+  pts.push([x1, y1]);
+  return pts;
+}
+
+// 闪电（或龙息）命中：dmg 点伤害；Boss 血量跨过阈值就进入考验
+function hit(m, dmg) {
+  const x = m.x * W, y = L.groundY - monH(m) * 0.5;
+  m.hp -= dmg;
+  m.flash = 1;
+  if (m.hp <= 0) {
+    game.kills++;
+    playSample('muyu', 0.94 + Math.random() * 0.12);
+    if (m.type === 'boss') {
+      playSample('boom');
+      setTimeout(() => playSample('fanfare'), 300);
+    } else playSample(MONSTERS[m.type].sfx, 0.94 + Math.random() * 0.12);
+    if (m.type === 'boss') {
+      const b = BOSSES[m.boss], cap = chargeCap();
+      game.bossesBeaten.push(b.name);
+      burst(x, y, '#ffe680', 90);
+      float(`${b.name}被打败了！`, x, y - monH(m) * 0.6, { size: 30, life: 2.2 });
+      if (chargeCap() > cap) float(`法杖充能上限 +1，现在 ${chargeCap()} 格`, x, y - monH(m) * 0.6 + 40, { size: 22, life: 2.6, color: '#7fd8ff' });
+    } else {
+      burst(x, y, '#ffe680', 16);
+      const t = MONSTERS[m.type].kill;
+      float(t, x, y - monH(m) * 0.5, { size: t.length > 6 ? 16 : 22, life: t.length > 6 ? 2 : 1.2 });
+    }
+  } else if (m.type === 'boss' && !m.trial && m.pending.length && m.hp <= m.pending[0].at) {
+    startTrial(m, m.pending.shift().kind);
+  }
+}
+
+function startTrial(m, kind) {
+  const t = BOSSES[m.boss].trials[kind];
+  m.trial = { kind, progress: 0, time: 0 };
+  m.stun = 0;
+  if (t.laugh) playSample('laughFull');
+  float(t.start, m.x * W, L.groundY - monH(m) * 1.15, { size: 26, life: 1.8, color: '#ffd34d' });
+}
+
+function endTrial(m, ok) {
+  const b = BOSSES[m.boss], t = b.trials[m.trial.kind], x = m.x * W, y = L.groundY - monH(m) * 1.15;
+  if (ok) {
+    burst(x, L.groundY - monH(m) * 0.5, '#7dffa0', 30);
+    float(t.ok, x, y, { size: 26, life: 1.8, color: '#7dffa0' });
+    if (m.trial.kind === 'burst') m.stun = 2.5;
+  } else if (t.fail === 'jam') {
+    game.jam = 5;
+    sfx('fail');
+    float(t.failText, L.orbX + 30, L.orbY - 30, { size: 24, life: 3, color: '#ff8a7a' });
+  } else if (t.fail === 'duang') {
+    game.wallHp -= 15;
+    game.shake = 0.6;
+    sfx('duang');
+    float(t.failText, L.wallX + 60, L.wallTop - 20, { size: 36, life: 1.6, color: '#ff8a7a' });
+  }
+  m.trial = null;
+}
+
+// 龙息：火焰从龙娘嘴边喷出，BREATH_SWEEP 秒内扫过全屏，火线扫到谁谁掉血（不管走没走进射程）
+const BREATH_SWEEP = 0.9;
+function dragonBreath() {
+  const o = helperSpot(0);
+  addFx('breath', 1.7, { dmg: boltRange() >= 1 ? 2 : 1, done: new Set(), ox: o.x + L.unit * 0.6, oy: o.foot - o.h * 0.72, front: 0 });
+  game.quake = 0.6;
+}
+
+function updateBreath(f, dt) {
+  const u = L.unit, k = Math.min(1, f.t / BREATH_SWEEP);
+  f.front = f.ox + (W * 1.05 - f.ox) * (1 - (1 - k) ** 2);
+  if (f.t <= BREATH_SWEEP) for (const m of game.monsters) {  // 扫完以后才出场的怪不算
+    if (f.done.has(m) || m.hp <= 0 || m.x * W > f.front || (m.trial && TRIALS[m.trial.kind].invulnerable)) continue;
+    f.done.add(m);
+    hit(m, f.dmg);
+    for (let i = 0; i < 10; i++) {
+      glow('fire', m.x * W + (Math.random() - 0.5) * monW(m) * 0.7, L.groundY - Math.random() * monH(m),
+        { vy: -u * (2 + Math.random() * 4), r: u * (0.5 + Math.random() * 0.7), decay: 1.3 });
+    }
+  }
+  if (f.t > BREATH_SWEEP + 0.15) return;
+  emit(260 * dt, () => {  // 主火流：喷向火线，越飞越大
+    const ty = L.groundY - Math.random() * u * 7, dx = f.front - f.ox, dy = ty - f.oy, d = Math.hypot(dx, dy) || 1, v = W * (1.4 + Math.random() * 0.6);
+    const k0 = Math.random() * 0.03;  // 出生点沿喷射方向错开一点，火流从嘴边就是连着的
+    glow('fire', f.ox + dx * k0, f.oy + dy * k0, { vx: (dx / d) * v, vy: (dy / d) * v, drag: 0.5, r: u * 1.1, grow: u * 3.8, decay: 1.4, alpha: 0.8 });
+  });
+  emit(170 * dt, () => glow('fire', f.front - Math.random() * u * 4, L.groundY - Math.random() * u * 2,  // 火线上窜起的火墙
+    { vx: -u * Math.random() * 2, vy: -u * (4 + Math.random() * 6), r: u * (1 + Math.random() * 1.5), grow: u * 1.5, decay: 1.8 }));
+  emit(50 * dt, () => glow('fire', f.ox + Math.random() * (f.front - f.ox), L.groundY - Math.random() * u,  // 烧过的地面留下余烬
+    { vy: -u * (1 + Math.random() * 2), r: u * (0.3 + Math.random() * 0.4), decay: 1 }));
+}
+
+function record() {
+  const boss = game.monsters.find(m => m.type === 'boss');
+  const row = {
+    time: timestamp(),
+    t: +((performance.now() - game.startedAt) / 1000).toFixed(2),
+    source, mode: game.mode, stage: game.stage + 1, stageType: game.stageInfo.kind, boss: game.stageInfo.boss || '',
+    phase: game.phase, quality: signal.quality ?? '', attention: signal.attention ?? '', meditation: signal.meditation ?? '',
+  };
+  BAND_KEYS.forEach((k, i) => { row[k] = signal.bands ? signal.bands[i] : ''; });
+  Object.assign(row, {
+    energy: +game.energy.toFixed(2), wallHp: Math.round(game.wallHp), monsters: game.monsters.length,
+    kills: game.kills, shots: game.shots, bossHp: boss ? boss.hp : '', bossTrial: boss?.trial?.kind || '',
+  });
+  game.rows.push(row);
+}
+
+function finishGame(won) {
+  game.phase = 'done';
+  clearInterval(demo.timer);
+  if (won) sfx('win');
+  $('resultTitle').textContent = won ? '赢麻了！城堡守住了' : game.wallHp <= 0 ? '芭比Q了，城墙被攻破了' : '游戏结束';
+  const good = game.rows.filter(r => r.quality !== '' && r.quality < POOR_SIGNAL);
+  const avg = k => (good.length ? (good.reduce((s, r) => s + r[k], 0) / good.length).toFixed(1) : '--');
+  const goodPct = game.rows.length ? Math.round((good.length / game.rows.length) * 100) : 0;
+  const helpers = [...HELPERS, { key: 'deepseek', name: 'DeepSeek 娘' }].map(h => `${h.name} ${game.helperCalls[h.key] || 0} 次`).join('，');
+  const where = won ? '打通全部三章，并打败了奶龙' : `${CHAPTERS[game.chapter].title} · ${stageLabel()}（第 ${game.stage + 1} 关）`;
+  $('resultBody').innerHTML = `<table>
+    <tr><td>${won ? '战绩' : '坚持到'}</td><td>${where}</td></tr>
+    <tr><td>打败的 Boss</td><td>${game.bossesBeaten.join('、') || '无'}</td></tr>
+    <tr><td>击杀怪物</td><td>${game.kills} 只（放了 ${game.shots} 道闪电）</td></tr>
+    <tr><td>召唤援军</td><td>${helpers}</td></tr>
+    <tr><td>城墙剩余</td><td>${Math.max(0, Math.round(game.wallHp))} / ${game.wallMax}</td></tr>
+    <tr><td>有效游戏时间</td><td>${game.playTime.toFixed(1)} 秒（不含暂停）</td></tr>
+    </table>
+    <p>信号良好时：平均专注 ${avg('attention')}，平均放松 ${avg('meditation')}<br>
+    共记录 ${game.rows.length} 个数据包，其中信号良好 ${goodPct}%</p>`;
+  $('btnCsv').disabled = !game.rows.length;
+  show('result');
+}
+
+// --- 每帧更新 ---
+// 正在进行的考验里 Boss 自己的设定（没有考验时为 null）
+const ownTrial = m => (m.trial ? BOSSES[m.boss].trials[m.trial.kind] : null);
+// 奶蛙狂笑时法师也笑场：充能速度乘上这个系数
+const chargeMul = () => game.monsters.reduce((k, m) => k * (ownTrial(m)?.chargeMul ?? 1), 1);
+
+// 当前考验的规则：通用规则为准，Boss 自己写了门槛（below / above / atLeast）或时长（need）的用 Boss 的
+function trialRule(m) {
+  const t = TRIALS[m.trial.kind], own = BOSSES[m.boss].trials[m.trial.kind], r = { ...t };
+  for (const k of ['need', 'below', 'above', 'atLeast']) if (own[k] !== undefined) r[k] = own[k];
+  return r;
+}
+
+// 闪电能不能打它：狂笑等"无敌"考验打不了；"停手"考验里已经达标（停手了）也不再打它
+function targetable(m) {
+  if (!m.trial) return true;
+  const t = trialRule(m);
+  return !t.invulnerable && !(t.reflect && t.test(t));
+}
+
+function fire(m) {
+  if (game.castT > 0.1) {  // 同一次齐射的第二道不重新起手
+    game.castT = 0;
+    placeWizard();
+  }
+  const tx = m.x * W, ty = L.groundY - monH(m) * 0.5, u = L.unit;
+  game.bolts.push({ pts: boltPath(L.orbX, L.orbY, tx, ty), life: 1, color: game.boost ? '#ffb3ff' : '#bfefff' });
+  glow(game.boost ? 'magic' : 'bolt', L.orbX, L.orbY, { r: u * 0.8, grow: u * 5, decay: 6, alpha: 0.8 });
+  glow(game.boost ? 'magic' : 'bolt', tx, ty, { r: u * 2.6, grow: -u * 3, decay: 3.5 });
+  if (game.boost) for (let i = 0; i < 4; i++) {
+    const k = Math.random();
+    glow('star', L.orbX + (tx - L.orbX) * k, L.orbY + (ty - L.orbY) * k, { r: u * (0.35 + Math.random() * 0.35), spin: 6, vy: -u * 2, decay: 1.6 });
+  }
+  if (m.trial && TRIALS[m.trial.kind].reflect) {  // 跳舞 / 装睡时被打：闪电反弹到城墙
+    game.bolts.push({ pts: boltPath(tx, ty, L.wallX, L.groundY - L.unit * 5), life: 1, color: '#ff9a9a' });
+    game.wallHp -= 4;
+    game.shake = 0.25;
+    sfx('reflect');
+    if (game.playTime - (m.reflectAt ?? -9) > 1.5) {
+      m.reflectAt = game.playTime;
+      float('破防了', L.wallX + 50, L.wallTop - 10, { size: 26, color: '#ff8a7a' });
+    }
+    return;
+  }
+  hit(m, 1);
+}
+
+// Boss 每帧：召唤小怪、考验计时。返回 true 表示这一帧原地不动、不撞墙
+// "停手"考验（企鹅跳舞、奶龙装睡）期间全场肃静：不刷怪、不召唤
+const quiet = () => game.monsters.some(m => m.trial && TRIALS[m.trial.kind].reflect);
+
+function updateBoss(m, dt) {
+  const b = BOSSES[m.boss], t = m.trial && trialRule(m);
+  if (!quiet() && (m.summon += dt) >= (t?.fast && b.fastSummonEvery ? b.fastSummonEvery : b.summonEvery)) {
+    m.summon = 0;
+    spawn(b.summon, m.x - (monW(m) * 0.4) / W);
+    if (b.summonText) float(b.summonText, m.x * W, L.groundY - monH(m) * 1.1, { size: 20 });
+  }
+  if (m.stun > 0) {
+    m.stun -= dt;
+    return true;
+  }
+  if (!t) return false;
+  const infect = ownTrial(m).infect;
+  if (infect) for (const o of game.monsters) {
+    if (o.type !== infect[0]) continue;
+    Object.assign(o, { type: infect[1], hp: MONSTERS[infect[1]].hp });
+    float('哈哈哈', o.x * W, L.groundY - monH(o) * 1.2, { size: 18, life: 1.2 });
+  }
+  m.trial.time += dt;
+  if (t.test(t)) m.trial.progress += dt;
+  if (m.trial.progress >= t.need) endTrial(m, true);
+  else if (t.limit && m.trial.time >= t.limit) endTrial(m, false);
+  return true;
+}
+
+// 蓝色大肥鱼在场时，迪普西克公司老板梁武谷封锁国外模型：援军召唤不出来
+const blockade = () => game.monsters.some(m => m.type === 'boss' && m.boss === 'dsgirl');
+
+function updateHelpers(dt) {
+  const blocked = blockade();
+  game.liangT = blocked ? game.liangT + dt : 0;
+  game.liangShout = Math.max(0, game.liangShout - dt);
+  game.suspended = Math.max(0, game.suspended - dt);
+  for (const [i, h] of HELPERS.entries()) {
+    const st = game.helpers[h.key];
+    st.cd = Math.max(0, st.cd - dt);
+    st.show = Math.max(0, st.show - dt);
+    if (st.cd > 0) continue;
+    st.hold = h.test() ? st.hold + dt : Math.max(0, st.hold - dt * 2);
+    if (st.hold < h.hold) continue;
+    if (blocked) {  // 条件达成也召唤不出来，梁武谷猛地一震
+      st.hold = 0;
+      game.liangShout = 2;
+      if (h.blocked) game.suspended = SUSPENDED_SHOW;
+      else float(`${h.name}被梁武谷拦下了`, (L.wallLeft + L.wallX) / 2, L.wallTop - L.unit * 5.5 - i * 30, { size: 22, life: 2, color: '#ff8a7a' });
+      continue;
+    }
+    Object.assign(st, { hold: 0, cd: HELPER_CD, show: 3 });
+    game.helperCalls[h.key] = (game.helperCalls[h.key] || 0) + 1;
+    sfx('helper');
+    // 每位援军的提示各占一行，同时召唤时不会叠在一起
+    float(`${h.name}：${h.act()}`, (L.wallLeft + L.wallX) / 2, L.wallTop - L.unit * 5.5 - i * 30, { size: 22, life: 2.2, color: '#ffd6f5' });
+  }
+  updateDeepseek(dt);
+}
+
+// DeepSeek 娘能不能用：打败过蓝色大肥鱼，且她本人现在没在当 Boss（无尽模式里大肥鱼会再来）
+const dsJoined = () => game.bossesBeaten.includes(BOSSES.dsgirl.name);
+const dsReady = () => dsJoined() && !blockade() && game.ds.cd <= 0;
+
+// 鲸鱼的目标：优先 Boss；Boss 无敌、或在"停手"考验里（打了会反弹）时打离城墙最近的小怪
+function whaleTarget() {
+  const ok = game.monsters.filter(m => m.hp > 0 && m.x < 1 && targetable(m) && !(m.trial && TRIALS[m.trial.kind].reflect));
+  return ok.find(m => m.type === 'boss') || ok.sort((a, b) => a.x - b.x)[0];
+}
+
+const dsSpot = () => ({ x: L.wallLeft + (L.wallX - L.wallLeft) * 0.55, foot: L.wallTop + L.unit * 0.4, h: L.unit * 4.6 });
+
+function updateDeepseek(dt) {
+  const st = game.ds;
+  st.cd = Math.max(0, st.cd - dt);
+  st.show = Math.max(0, st.show - dt);
+  if (!dsReady()) {
+    st.think = 0;
+  } else if (game.att >= DS.thinkAt) {
+    st.think += dt;
+    if (st.think >= DS.busyAt) {
+      Object.assign(st, { think: 0, cd: HELPER_CD });
+      sfx('fail');
+      float('DeepSeek 娘：服务器繁忙，请稍后再试', (L.wallLeft + L.wallX) / 2, L.wallTop - L.unit * 7, { size: 22, life: 2.4, color: '#ff8a7a' });
+    }
+  } else if (game.att < DS.releaseAt) {
+    const m = st.think >= 1 && whaleTarget();
+    if (m) {  // 想了几秒就打几点
+      const { x, foot, h } = dsSpot(), dmg = Math.min(DS.maxDmg, Math.floor(st.think));
+      game.whales.push({ m, dmg, t: 0, sx: x, sy: foot - h * 0.6 });
+      Object.assign(st, { think: 0, cd: HELPER_CD, show: 3 });
+      game.helperCalls.deepseek = (game.helperCalls.deepseek || 0) + 1;
+      sfx('helper');
+      float('小男梁的鲸元券！🐳', (L.wallLeft + L.wallX) / 2, L.wallTop - L.unit * 7, { size: 26, life: 2.4, color: '#7fb4ff' });
+    } else if (st.think < 1) st.think = 0;  // 想了不到 1 秒就放下，不算；场上没目标时先憋着
+  }
+  // 鲸鱼飞向目标，到了才结算伤害；目标半路死了就换一个
+  for (const wh of game.whales) {
+    wh.t += dt / DS.fly;
+    if (wh.t < 1) continue;
+    const m = game.monsters.includes(wh.m) && wh.m.hp > 0 ? wh.m : whaleTarget();
+    if (!m) continue;
+    hit(m, wh.dmg);
+    playSample('drop');
+    burst(m.x * W, L.groundY - monH(m) * 0.5, '#4d6bfe', 40);
+    glow('magic', m.x * W, L.groundY - monH(m) * 0.5, { r: L.unit * 1.5, grow: L.unit * 12, decay: 2.5 });
+    float(`-${wh.dmg}`, m.x * W, L.groundY - monH(m) * 1.05, { size: 30, color: '#7fb4ff' });
+  }
+  game.whales = game.whales.filter(wh => wh.t < 1);
+}
+
+// --- 援军和施法的特效 ---
+// 每个特效有 kind、已播放时间 t 和总时长 dur；发光粒子（game.glows）用预先画好的贴图叠加绘制
+function addFx(kind, dur, extra = {}) {
+  game.fx.push({ kind, t: 0, dur, ...extra });
+}
+const fxOf = kind => game.fx.find(f => f.kind === kind);
+const fxEnv = (f, fadeIn, fadeOut) => Math.max(0, Math.min(1, f.t / fadeIn, (f.dur - f.t) / fadeOut));
+const helperSpot = i => ({ x: L.wallLeft + (L.wallX - L.wallLeft) * (0.25 + i * 0.3), foot: L.wallTop + L.unit * 0.4, h: L.unit * 4.6 });
+
+// 按每秒 rate 个的速率发射（小数部分按概率）
+function emit(n, make) {
+  for (n += Math.random(); n >= 1; n--) make();
+}
+
+function glow(tex, x, y, opt = {}) {
+  game.glows.push({ tex, x, y, vx: 0, vy: 0, r: L.unit, grow: 0, life: 1, decay: 1.5, drag: 0, rot: Math.random() * 6.3, spin: 0, ...opt });
+}
+
+function updateFx(dt) {
+  const u = L.unit;
+  for (const f of game.fx) {
+    f.t += dt;
+    if (f.kind === 'breath') updateBreath(f, dt);
+    else if (f.kind === 'heal' && f.t < 1.8) {
+      emit(70 * dt, () => {  // 城堡上冒出治愈的光点和小十字
+        const x = L.castleX + Math.random() * (L.wallX - L.castleX), y = L.groundY - Math.random() * L.castleH * 0.85, cross = Math.random() < 0.3;
+        glow(cross ? 'cross' : Math.random() < 0.5 ? 'heal' : 'warm', x, y,
+          { vx: (Math.random() - 0.5) * u, vy: -u * (2 + Math.random() * 4), r: u * (cross ? 0.35 : 0.3 + Math.random() * 0.5), decay: 0.9 });
+      });
+    } else if (f.kind === 'gemini' && f.t < 0.8) {
+      const s = helperSpot(2);
+      emit(55 * dt, () => glow('star', s.x + (Math.random() - 0.5) * u * 2, s.foot - s.h * (0.4 + Math.random() * 0.5), {  // 星光绕着飞进法杖
+        vx: (Math.random() - 0.5) * u * 14, vy: -u * (4 + Math.random() * 8), home: u * 140, drag: 1.6, r: u * (0.3 + Math.random() * 0.4), spin: 5, decay: 0.7 }));
+    }
+  }
+  game.fx = game.fx.filter(f => f.t < f.dur);
+}
+
+function updateGlows(dt) {
+  for (const g of game.glows) {
+    if (g.home) {  // 朝法杖宝珠飞，到了就消失
+      const dx = L.orbX - g.x, dy = L.orbY - g.y, d = Math.hypot(dx, dy) || 1;
+      g.vx += (dx / d) * g.home * dt;
+      g.vy += (dy / d) * g.home * dt;
+      if (d < L.unit * 0.7) g.life = 0;
+    }
+    const k = Math.exp(-g.drag * dt);
+    g.vx *= k;
+    g.vy *= k;
+    g.x += g.vx * dt;
+    g.y += g.vy * dt;
+    g.r = Math.max(0, g.r + g.grow * dt);
+    g.rot += g.spin * dt;
+    g.life -= g.decay * dt;
+  }
+  game.glows = game.glows.filter(g => g.life > 0);
+}
+
+function duduPopup() {
+  if (game.playTime - game.duduAt < 25) return;
+  game.duduAt = game.playTime;
+  const v = $('dudu');
+  v.currentTime = 0;
+  v.classList.remove('hidden');
+  v.play().catch(() => v.classList.add('hidden'));
+  if (sound.on) {
+    sound.voice.currentTime = 0;
+    sound.voice.play().catch(() => {});
+  }
+}
+
+function update(dt, now) {
+  updatePause(now);
+  scene.t += dt;
+  if (source === 'demo') {
+    const step = 40 * dt, clamp = v => Math.max(0, Math.min(100, v));
+    if (keys.ArrowUp) demo.value = clamp(demo.value + step);
+    if (keys.ArrowDown) demo.value = clamp(demo.value - step);
+    if (keys.ArrowRight) demo.med = clamp(demo.med + step);
+    if (keys.ArrowLeft) demo.med = clamp(demo.med - step);
+  }
+  updateEffects(dt);
+  if (game.phase !== 'playing') return;
+
+  // 数据每秒才更新一次，这里平滑过渡
+  const k = 1 - Math.exp(-dt / 0.7), prevAtt = game.att;
+  game.att += ((signal.attention ?? 0) - game.att) * k;
+  game.med += ((signal.meditation ?? 0) - game.med) * k;
+  game.playTime += dt;
+  game.bannerTime += dt;
+  game.jam = Math.max(0, game.jam - dt);
+  game.boost = Math.max(0, game.boost - dt);
+  if (prevAtt < SUPER_AT && game.att >= SUPER_AT && game.playTime - game.superAt > 10) {
+    game.superAt = game.playTime;
+    float('芜湖起飞！', L.orbX + 40, L.orbY - 50, { size: 28, color: '#7fd8ff' });
+  }
+
+  if (game.med >= RELAX_AT && game.wallHp < game.wallMax) {
+    game.wallHp = Math.min(game.wallMax, game.wallHp + ((game.med - RELAX_AT) / (100 - RELAX_AT)) * REPAIR_RATE * dt);
+    if (Math.random() < dt * 8) {
+      game.particles.push({ x: L.wallX - Math.random() * (L.wallX - L.wallLeft), y: L.groundY - Math.random() * (L.groundY - L.wallTop),
+        vx: 0, vy: -40, life: 1, color: '#7dffa0', r: 2.5, float: true });
+    }
+  }
+  updateHelpers(dt);
+  updateFx(dt);
+
+  const rate = CHARGE_RATE * (game.att / 100) ** 2 * chargeMul();
+  if (chargeMul() < 1 && (game.haha += dt) > 0.7) {
+    game.haha = 0;
+    float(['哈哈哈', '噗哈哈', '哈哈'][Math.floor(Math.random() * 3)], L.wizFeetX + (Math.random() - 0.3) * L.wizW, L.towerTop - L.wizH * 1.05,
+      { size: 18 + Math.random() * 6, life: 1.1, color: '#ffd34d' });
+  }
+  if (!game.jam) game.energy = Math.min(chargeCap(), game.energy + rate * dt);
+  game.cooldown -= dt;
+  const targets = game.monsters.filter(m => m.x < boltRange() && targetable(m)).sort((a, b) => a.x - b.x);
+  const cost = boltCost(game.att);
+  if (!game.jam && game.energy >= cost && game.cooldown <= 0 && targets.length) {
+    // 超能时一次最多劈两只；射程里只有一只就只放一道，剩下的能量留给下一次
+    const n = Math.min(targets.length, game.att >= SUPER_AT ? 2 : 1, Math.floor(game.energy / cost));
+    targets.slice(0, n).forEach(fire);
+    game.energy -= n * cost;
+    game.cooldown = 0.25;
+    game.shots += n;
+    sfx('zap');
+  }
+  game.monsters = game.monsters.filter(m => m.hp > 0);
+
+  if (game.queue.length) {
+    game.spawnTimer += dt;
+    if (game.spawnTimer >= (game.stageInfo.kind === 'boss' ? 0 : spawnInterval(level()))) {
+      game.spawnTimer = 0;
+      spawn(game.queue.shift());
+    }
+  } else if (game.stageInfo.kind === 'boss' && game.monsters.some(m => m.type === 'boss')) {
+    if (!quiet() && (game.streamTimer += dt) >= BOSS_STREAM) {
+      game.streamTimer = 0;
+      const pool = POOLS[game.stageInfo.chapter];
+      spawn(Math.random() < 0.3 ? pool.fast : pool.basic);  // 重的小怪由 Boss 亲自召唤
+    }
+  } else if (!game.monsters.length) {
+    if (game.mode === 'campaign' && game.stage >= CAMPAIGN.length - 1) return finishGame(true);
+    nextStage();
+  }
+
+  const speed = waveSpeed(level());
+  for (const m of game.monsters) {
+    const s = spec(m), stopX = (L.wallX + monW(m) * 0.35) / W;
+    if (m.type === 'boss' && updateBoss(m, dt)) continue;
+    if (m.x > stopX) {
+      m.x = Math.max(stopX, m.x - s.speed * speed * dt);
+      m.walk += dt * s.speed;
+      continue;
+    }
+    if (m.type === 'dudu' && !m.yelled) {
+      m.yelled = true;
+      float('你胆子真是肥嘟嘟的！', m.x * W + 20, L.groundY - monH(m) * 1.2, { size: 18, life: 2 });
+      duduPopup();
+    }
+    if ((m.attack += dt) >= (s.every || 1.2)) {
+      m.attack = 0;
+      m.lunge = 1;
+      game.wallHp -= s.damage;
+      game.shake = 0.3;
+      burst(L.wallX, L.groundY - monH(m) * 0.5, '#c9b79c', 6);
+      if (m.type === 'boss') {
+        sfx('duang');
+        float('DUANG!', L.wallX + 50, L.groundY - monH(m), { size: 28 });
+      }
+    }
+  }
+  for (const [bit, line, text] of [[1, 50, '破防了'], [2, 25, '破大防了']]) {
+    if (game.wallHp < line && !(game.wallMarks & bit)) {
+      game.wallMarks |= bit;
+      float(text, L.wallX + 60, L.wallTop - 30, { size: 34, life: 1.8, color: '#ff8a7a' });
+    }
+  }
+  if (game.wallHp <= 0) {
+    game.wallHp = 0;
+    finishGame(false);
+  }
+}
+
+function updateEffects(dt) {
+  for (const m of game.monsters) {
+    m.flash = Math.max(0, m.flash - dt * 4);
+    m.lunge = Math.max(0, m.lunge - dt * 4);
+  }
+  game.shake = Math.max(0, game.shake - dt);
+  game.quake = Math.max(0, game.quake - dt);
+  game.castT += dt;
+  updateGlows(dt);
+  for (const b of game.bolts) b.life -= dt * 3.5;
+  game.bolts = game.bolts.filter(b => b.life > 0);
+  for (const p of game.particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (!p.float) p.vy += 400 * dt;
+    p.life -= dt * 1.2;
+  }
+  game.particles = game.particles.filter(p => p.life > 0);
+  for (const f of game.floaters) {
+    f.y -= 40 * dt;
+    f.life -= dt;
+  }
+  game.floaters = game.floaters.filter(f => f.life > 0);
+  if (scene.fade < 1) scene.fade = Math.min(1, scene.fade + dt / 1.5);
+}
+
+// --- 绘制 ---
+const canvas = $('game'), ctx = canvas.getContext('2d');
+const FONT = '"Microsoft YaHei", "PingFang SC", sans-serif';
+let W = 0, H = 0;
+const L = {};  // 随窗口大小变化的布局
+const scene = { t: 0, chapter: 0, prev: 0, fade: 1, castleRed: null, castleGreen: null };
+const frac = v => v - Math.floor(v);
+
+// 特效贴图：径向渐变的光团、Gemini 四角星、治愈十字，开局画一次，之后叠加着用
+const TEX = {};
+function makeTextures() {
+  const canvasOf = (size, paint) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    paint(c.getContext('2d'), size / 2);
+    return c;
+  };
+  const radial = stops => canvasOf(64, (g, r) => {
+    const grad = g.createRadialGradient(r, r, 0, r, r, r);
+    stops.forEach(([k, color]) => grad.addColorStop(k, color));
+    g.fillStyle = grad;
+    g.fillRect(0, 0, r * 2, r * 2);
+  });
+  TEX.fire = radial([[0, 'rgba(255, 250, 220, 1)'], [0.3, 'rgba(255, 190, 60, .85)'], [0.6, 'rgba(255, 80, 10, .35)'], [1, 'rgba(255, 40, 0, 0)']]);
+  TEX.heal = radial([[0, 'rgba(255, 255, 235, 1)'], [0.35, 'rgba(150, 255, 170, .75)'], [1, 'rgba(60, 220, 120, 0)']]);
+  TEX.warm = radial([[0, 'rgba(255, 245, 225, 1)'], [0.35, 'rgba(255, 170, 120, .7)'], [1, 'rgba(217, 119, 87, 0)']]);
+  TEX.magic = radial([[0, 'rgba(255, 255, 255, 1)'], [0.3, 'rgba(190, 160, 255, .85)'], [0.65, 'rgba(90, 130, 255, .35)'], [1, 'rgba(70, 110, 255, 0)']]);
+  TEX.bolt = radial([[0, 'rgba(255, 255, 255, 1)'], [0.3, 'rgba(180, 235, 255, .8)'], [1, 'rgba(80, 170, 255, 0)']]);
+  TEX.star = canvasOf(64, (g, r) => {
+    g.shadowColor = 'rgba(200, 180, 255, .9)';
+    g.shadowBlur = 6;
+    sparklePath(g, r, r, r * 0.85);
+    g.fillStyle = geminiGradient(g, r, r, r);
+    g.fill();
+  });
+  TEX.cross = canvasOf(48, (g, r) => {
+    g.shadowColor = 'rgba(120, 255, 160, .9)';
+    g.shadowBlur = 8;
+    g.fillStyle = '#eafff0';
+    g.beginPath();
+    g.roundRect(r - 4, r - 14, 8, 28, 3);
+    g.roundRect(r - 14, r - 4, 28, 8, 3);
+    g.fill();
+  });
+}
+
+// Gemini 标志那样的四角星，以及它的蓝→紫→粉渐变
+function sparklePath(g, x, y, r) {
+  const k = r * 0.14;
+  g.beginPath();
+  g.moveTo(x, y - r);
+  g.quadraticCurveTo(x + k, y - k, x + r, y);
+  g.quadraticCurveTo(x + k, y + k, x, y + r);
+  g.quadraticCurveTo(x - k, y + k, x - r, y);
+  g.quadraticCurveTo(x - k, y - k, x, y - r);
+}
+
+function geminiGradient(g, x, y, r) {
+  const grad = g.createLinearGradient(x - r, y + r, x + r, y - r);
+  grad.addColorStop(0, '#4285f4');
+  grad.addColorStop(0.55, '#9b72cb');
+  grad.addColorStop(1, '#d96570');
+  return grad;
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = innerWidth;
+  H = innerHeight;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  L.unit = Math.max(14, Math.min(W, H) * 0.034);
+  L.groundY = H * 0.86;
+  // 城堡图：左边是塔（塔顶在 23.5% 高度），右边是城墙（墙顶在 57% 高度，右侧面就是怪物撞的地方）
+  const c = SPR.castle || { w: 355, h: 520 }, wz = SPR.wizard || { w: 214, h: 260 };
+  L.castleH = H * 0.5;
+  L.castleW = (L.castleH * c.w) / c.h;
+  L.castleX = W * 0.015;
+  L.castleTop = L.groundY - L.castleH;
+  L.wallX = L.castleX + L.castleW * 0.99;
+  L.wallLeft = L.castleX + L.castleW * 0.6;
+  L.wallTop = L.castleTop + L.castleH * 0.57;
+  L.towerX = L.castleX + L.castleW * 0.28;
+  L.towerTop = L.castleTop + L.castleH * 0.235;
+  L.wizH = L.castleH * 0.42;
+  L.wizW = (L.wizH * wz.w) / wz.h;
+  L.wizLeft = L.towerX - L.wizW * 0.42;
+  L.wizFeetX = L.wizLeft + L.wizW * WIZ_POSES.wizard.feet;
+  placeWizard();
+  [L.orbHomeX, L.orbHomeY] = [L.orbX, L.orbY];  // 法杖旁的提示文字固定在这里，不跟着施法动作晃
+}
+
+// 法师的姿势：静止图（动画没加载出来时用）/ 待机 / 施法 / 奶蛙大笑时跟着笑场。
+// feet：两只靴子左右范围的中点在图里的横向位置；scale：画出来的高度是静止图的几倍（各段动画的裁剪框不同）；
+// orb：每一帧法杖宝珠在图里的位置（h3/wizmeta.py 量出来的），闪电从这里发出
+const WIZ_POSES = {
+  wizard: { feet: 0.377, scale: 1, orb: [[0.913, 0.209]] },
+  'wizard-idle': { feet: 0.394, scale: 1, orb: [[0.915,0.213],[0.915,0.213],[0.914,0.213],[0.913,0.211],[0.91,0.209],[0.906,0.206],[0.904,0.204],[0.9,0.201],[0.897,0.198],[0.893,0.195],[0.889,0.193],[0.885,0.191],[0.883,0.189],[0.88,0.187],[0.879,0.186],[0.878,0.185],[0.879,0.186],[0.88,0.187],[0.884,0.191],[0.889,0.195],[0.896,0.2],[0.901,0.205],[0.906,0.208],[0.909,0.21],[0.913,0.211],[0.914,0.212],[0.915,0.213],[0.916,0.213],[0.916,0.213],[0.916,0.213],[0.916,0.213]] },
+  'wizard-cast': { feet: 0.32, scale: 0.988, orb: [[0.919,0.469],[0.92,0.467],[0.921,0.467],[0.921,0.466],[0.922,0.467],[0.914,0.462],[0.88,0.428],[0.824,0.344],[0.75,0.222],[0.741,0.205],[0.741,0.204],[0.741,0.204],[0.741,0.205],[0.741,0.204]] },
+  'wizard-laugh': { feet: 0.397, scale: 458 / 447, orb: [[0.905,0.229],[0.902,0.237],[0.894,0.225],[0.888,0.221],[0.903,0.228],[0.904,0.236],[0.896,0.228],[0.89,0.222],[0.901,0.227],[0.905,0.236],[0.899,0.228],[0.889,0.221],[0.9,0.229],[0.907,0.233],[0.9,0.231],[0.893,0.222],[0.901,0.227],[0.908,0.232],[0.904,0.233],[0.894,0.221],[0.896,0.223],[0.907,0.23],[0.899,0.227],[0.889,0.22],[0.9,0.225],[0.907,0.234],[0.901,0.231],[0.89,0.221],[0.895,0.221],[0.907,0.235],[0.904,0.234],[0.893,0.226],[0.893,0.219]] },
+};
+const CAST_FPS = 16;  // 施法动画：从杖尖前刺的那一帧开始，播完收回待机
+
+// 现在该用哪段动画的哪一帧
+function wizardPose(t) {
+  const loop = name => [name, Math.floor(t * SPR[name].fps) % SPR[name].n];
+  if (game.phase !== 'menu' && chargeMul() < 1 && SPR['wizard-laugh']) return loop('wizard-laugh');
+  const cast = SPR['wizard-cast'];
+  if (cast && game.castT * CAST_FPS < cast.n) return ['wizard-cast', Math.floor(game.castT * CAST_FPS)];
+  return SPR['wizard-idle'] ? loop('wizard-idle') : ['wizard', 0];
+}
+
+// 按靴子对齐摆放法师，并算出这一帧法杖宝珠的位置
+function placeWizard() {
+  const [name, i] = wizardPose(scene.t), p = WIZ_POSES[name], s = SPR[name] || { w: 214, h: 260 };
+  const h = L.wizH * p.scale, w = (h * s.w) / s.h, left = L.wizFeetX - w * p.feet, top = L.towerTop - h, orb = p.orb[Math.min(i, p.orb.length - 1)];
+  L.orbX = left + w * orb[0];
+  L.orbY = top + h * orb[1];
+  return { name, i, x: left + w / 2, h };
+}
+
+function text(s, x, y, size, color = '#fff', align = 'left', weight = '') {
+  ctx.font = `${weight} ${size}px ${FONT}`;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(s, x, y);
+}
+
+function panel(x, y, w, h) {
+  ctx.fillStyle = 'rgba(8, 14, 34, .72)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 12);
+  ctx.fill();
+}
+
+function circle(x, y, r) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function poly(pts) {
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+}
+
+function bar(x, y, w, h, k, color) {
+  ctx.fillStyle = 'rgba(255, 255, 255, .18)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, h / 2);
+  ctx.fill();
+  if (k <= 0) return;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w * Math.min(1, k), h, h / 2);
+  ctx.fill();
+}
+
+// 画精灵条的某一帧，以脚底中心 (x, foot) 为锚点，高度 h
+function drawSprite(name, x, foot, h, t, opt = {}) {
+  const s = SPR[name];
+  if (!s) return;
+  const i = opt.frame ?? (s.n > 1 ? Math.floor(t * s.fps) % s.n : 0), w = (h * s.w) / s.h;
+  ctx.save();
+  ctx.translate(x, foot);
+  if (opt.rot) ctx.rotate(opt.rot);
+  if (opt.flip) ctx.scale(-1, 1);
+  if (opt.alpha !== undefined) ctx.globalAlpha = opt.alpha;
+  if (opt.flash > 0) ctx.filter = `brightness(${1 + opt.flash * 1.5})`;
+  ctx.drawImage(s.img, i * s.w, 0, s.w, s.h, -w / 2, -h, w, h);
+  ctx.restore();
+}
+
+// 背景按"脚底所在高度"对齐地面，铺满画面
+function drawBg(chapter, alpha) {
+  const c = CHAPTERS[chapter], b = BG[c.bg];
+  if (!b || alpha <= 0) return;
+  const s = Math.max(W / b.w, H / b.h), dw = b.w * s, dh = b.h * s;
+  const y = Math.min(0, Math.max(H - dh, L.groundY - c.foot * dh));
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(b.img, (W - dw) / 2, y, dw, dh);
+  ctx.globalAlpha = 1;
+}
+
+function drawCastle() {
+  const c = SPR.castle;
+  if (!c) return;
+  ctx.drawImage(c.img, L.castleX, L.castleTop, L.castleW, L.castleH);
+  const heal = fxOf('heal');
+  if (heal && scene.castleGreen) {
+    ctx.save();
+    ctx.globalAlpha = 0.32 * fxEnv(heal, 0.25, 0.8) * (0.75 + 0.25 * Math.sin(heal.t * 9));
+    ctx.drawImage(scene.castleGreen, L.castleX, L.castleTop, L.castleW, L.castleH);
+    ctx.restore();
+  }
+  if (game.shake > 0 && scene.castleRed) {
+    ctx.globalAlpha = Math.min(0.6, game.shake * 1.5);
+    ctx.drawImage(scene.castleRed, L.castleX, L.castleTop, L.castleW, L.castleH);
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = 'rgba(30, 20, 20, .8)';
+  ctx.lineWidth = 2;
+  const cracks = Math.max(0, Math.floor((1 - game.wallHp / game.wallMax) * 7)), ww = L.wallX - L.wallLeft, wh = L.groundY - L.wallTop;
+  for (let i = 0; i < cracks; i++) {
+    const sx = L.wallLeft + ww * (0.2 + 0.6 * frac(i * 0.618)), sy = L.wallTop + wh * (0.2 + 0.6 * frac(i * 0.377 + 0.2));
+    poly([[sx, sy], [sx + 8, sy + 12], [sx + 2, sy + 22], [sx + 10, sy + 34]]);
+    ctx.stroke();
+  }
+}
+
+function drawWizard(t) {
+  const playing = game.phase !== 'menu', power = playing ? game.att / 100 : 0.4, u = L.unit;
+  const wz = placeWizard();
+  drawSprite(wz.name, wz.x, L.towerTop, wz.h, t, { frame: wz.i });
+  const glow = u * (0.6 + power * 1.4 + Math.sin(t * 6) * 0.1);
+  const g = ctx.createRadialGradient(L.orbX, L.orbY, 0, L.orbX, L.orbY, glow * 2);
+  const jam = game.jam > 0;
+  g.addColorStop(0, jam ? 'rgba(180, 180, 180, .6)' : game.boost ? `rgba(255, 170, 255, ${0.5 + power * 0.5})` : `rgba(170, 230, 255, ${0.4 + power * 0.6})`);
+  g.addColorStop(1, 'rgba(80, 160, 255, 0)');
+  ctx.fillStyle = g;
+  circle(L.orbX, L.orbY, glow * 2);
+  if (!playing) return;
+  if (game.boost > 0) drawMagicCircle(t);
+  ctx.strokeStyle = jam ? '#999' : '#7fd8ff';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  const cap = chargeCap(), part = game.energy >= cap ? 1 : frac(game.energy);
+  ctx.arc(L.orbX, L.orbY, u * 0.9, -Math.PI / 2, -Math.PI / 2 + part * Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#bfefff';
+  for (let i = 0; i < Math.floor(game.energy); i++) circle(L.orbX + (i - (cap - 1) / 2) * u * 0.55, L.orbY + u * 1.3, u * 0.17);
+  if (jam) text(`服务器繁忙…${Math.ceil(game.jam)}`, L.orbHomeX + u * 1.3, L.orbHomeY, 15, '#ff8a7a', 'left', 'bold');
+  else if (game.att >= SUPER_AT) text(game.boost ? '超能 + Gemini！闪电只耗 1/4 格' : '超能！闪电耗能减半', L.orbHomeX + u * 1.3, L.orbHomeY, 15, '#7fd8ff', 'left', 'bold');
+}
+
+// Gemini 加持时法杖宝珠外的魔法阵：两圈环、四颗小星，中间一颗慢慢转的大四角星
+function drawMagicCircle(t) {
+  const u = L.unit, env = Math.max(0, Math.min(1, game.boost / 0.4, (3 - game.boost) / 0.3)), R = u * 2.4;
+  ctx.save();
+  ctx.translate(L.orbX, L.orbY);
+  ctx.globalAlpha = env * 0.25;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(TEX.magic, -R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = env;
+  ctx.shadowColor = 'rgba(160, 130, 255, .9)';
+  ctx.shadowBlur = 10;
+  ctx.rotate(t * 1.2);
+  ctx.strokeStyle = geminiGradient(ctx, 0, 0, R);
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([u * 0.3, u * 0.25]);
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.8, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    sparklePath(ctx, Math.cos(a) * R, Math.sin(a) * R, u * 0.45);
+    ctx.fillStyle = geminiGradient(ctx, Math.cos(a) * R, Math.sin(a) * R, u * 0.45);
+    ctx.fill();
+  }
+  ctx.rotate(-t * 2);
+  ctx.globalAlpha = env * 0.75;
+  sparklePath(ctx, 0, 0, u * 1.3 * (1 + 0.08 * Math.sin(t * 6)));
+  ctx.fillStyle = geminiGradient(ctx, 0, 0, u * 1.5);
+  ctx.fill();
+  ctx.restore();
+}
+
+function spriteOf(m) {
+  if (m.type !== 'boss') return MONSTERS[m.type].sprite;
+  const b = BOSSES[m.boss];
+  if (m.trial) return b.trials[m.trial.kind].sprite;
+  if (m.stun > 0 && b.stun) return b.stun;
+  return b.walk;
+}
+
+function drawMonster(m) {
+  const s = spec(m), h = monH(m), t = scene.t + m.seed;
+  const moving = !m.trial && !(m.stun > 0) && m.x > (L.wallX + monW(m) * 0.35) / W + 0.001;
+  let x = m.x * W - m.lunge * L.unit, foot = L.groundY, rot = 0, hh = h;
+  if (s.hop && moving) foot -= Math.abs(Math.sin(m.walk * 7)) * L.unit * 1.2;
+  if (s.fly) foot -= L.unit * (1.4 + Math.sin(t * 3) * 0.3);
+  if (s.glide && moving) foot -= Math.abs(Math.sin(t * 9)) * L.unit * 0.12;
+  if (s.waddle && moving && SPR[spriteOf(m)]?.n === 1) rot = Math.sin(m.walk * 9) * 0.07;
+  if (m.trial?.kind === 'calm') { hh = h * 1.1; if (SPR[spriteOf(m)]?.n === 1) rot = Math.sin(t * 3) * 0.1; }  // 单帧图才靠摇摆假装在动
+  if (m.stun > 0) rot = Math.sin(t * 22) * 0.05;
+  ctx.fillStyle = 'rgba(0, 0, 0, .3)';
+  ctx.beginPath();
+  ctx.ellipse(m.x * W, L.groundY, monW(m) * 0.4, L.unit * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+  drawSprite(spriteOf(m), x, foot, hh, t, { rot, flash: m.flash });
+  if (m.trial) drawTrialFx(m, x, h, t);
+  if (m.stun > 0) for (let k = 0; k < 3; k++) {
+    const a = t * 4 + (k * Math.PI * 2) / 3;
+    text('★', x + Math.cos(a) * h * 0.25, L.groundY - h * 1.02 + Math.sin(a) * h * 0.06, 18, '#ffd34d', 'center');
+  }
+  if (m.type !== 'boss' && s.hp > 1) {
+    for (let i = 0; i < s.hp; i++) {
+      ctx.fillStyle = i < m.hp ? '#ff5d5d' : 'rgba(255, 255, 255, .3)';
+      circle(x + (i - (s.hp - 1) / 2) * 12, foot - h - 10, 4);
+    }
+  }
+}
+
+function drawTrialFx(m, x, h, t) {
+  const kind = m.trial.kind, top = L.groundY - h, cy = L.groundY - h * 0.5;
+  if (kind === 'relax') {  // 一圈圈扩散的笑声 / 哭声
+    ctx.strokeStyle = 'rgba(255, 210, 60, .8)';
+    ctx.lineWidth = 3;
+    for (let k = 0; k < 3; k++) {
+      const p = frac(t * 0.8 + k / 3);
+      ctx.globalAlpha = 1 - p;
+      ctx.beginPath();
+      ctx.arc(x, cy, h * (0.55 + p * 0.35), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const w = BOSSES[m.boss].trials.relax.laugh ? ['哈哈哈', '哈哈哈哈'] : ['呜呜呜', '呜哇'];
+    text(w[0], x + h * 0.45, top + h * (0.05 + frac(t) * 0.15), 18 + h * 0.03, '#ffd34d', 'left', 'bold');
+    text(w[1], x - h * 0.85, top + h * (0.3 + frac(t + 0.5) * 0.15), 16 + h * 0.025, '#ffd34d', 'left', 'bold');
+  } else if (kind === 'calm') {  // 飘着的音符 / Zzz
+    const sym = m.boss === 'nailong' ? 'Z' : '♪';
+    for (let k = 0; k < 4; k++) {
+      const p = frac(t * 0.5 + k / 4);
+      ctx.globalAlpha = 1 - p;
+      text(sym, x + Math.sin(k * 2 + t) * h * 0.4, top - p * h * 0.4, 20 + k * 3, '#ffd6f5', 'center', 'bold');
+    }
+    ctx.globalAlpha = 1;
+  } else {  // 头顶的思考泡泡 + 倒计时圈
+    const bx = x + h * 0.35, by = top - h * 0.05, r = L.unit * 1.4, left = TRIALS.burst.limit - m.trial.time;
+    ctx.fillStyle = 'rgba(255, 255, 255, .9)';
+    circle(bx, by, r);
+    circle(bx - r * 0.9, by + r * 0.9, r * 0.25);
+    ctx.strokeStyle = '#ff6b5b';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(bx, by, r, -Math.PI / 2, -Math.PI / 2 + (left / TRIALS.burst.limit) * Math.PI * 2);
+    ctx.stroke();
+    text(m.boss === 'dsgirl' ? '🤔' : '💢', bx, by - 2, r * 0.9, '#222', 'center');
+  }
+}
+
+function drawHelpers(t) {
+  if (blockade()) return;
+  HELPERS.forEach((h, i) => {
+    const st = game.helpers[h.key];
+    if (!st || st.show <= 0) return;
+    const alpha = Math.min(1, st.show / 0.4, (3 - st.show) / 0.3 + 0.2), s = helperSpot(i), pop = Math.min(1, (3 - st.show) / 0.25);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.translate(s.x, s.foot);
+    ctx.scale(1, 0.3);
+    const r = L.unit * (2.2 + Math.sin(t * 6) * 0.15);
+    ctx.drawImage(TEX[h.aura], -r, -r, r * 2, r * 2);
+    ctx.restore();
+    drawSprite(h.sprite, s.x, s.foot, s.h * (0.75 + 0.25 * pop), t, { alpha });
+  });
+}
+
+// 梁武谷：大肥鱼出场时右边天空滑入一个"发布会直播"画面（网上的肌肉男梗图原图），对着你问话；拦下援军时画面一震
+function drawLiang(t) {
+  if (!game.liangT) return;
+  const s = SPR.liang, slide = (1 - Math.min(1, game.liangT / 0.6)) ** 3, shout = game.liangShout / 2;
+  const h = H * 0.31 * (1 + shout * 0.05), w = (h * s.w) / s.h;
+  const x = W - 16 - w + slide * (w + 40) + Math.sin(t * 70) * 6 * shout, y = H * 0.3;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 12);
+  ctx.clip();
+  drawSprite('liang', x + w / 2, y + h, h, t);
+  ctx.fillStyle = 'rgba(8, 14, 34, .8)';
+  ctx.fillRect(x, y + h - 30, w, 30);
+  text('迪普西克公司老板 梁武谷', x + w / 2, y + h - 15, 14, '#fff', 'center', 'bold');
+  ctx.fillStyle = '#e53935';
+  ctx.beginPath();
+  ctx.roundRect(x + 10, y + 10, 46, 22, 6);
+  ctx.fill();
+  text('直播', x + 33, y + 21, 13, '#fff', 'center', 'bold');
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255, 255, 255, .9)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 12);
+  ctx.stroke();
+  if (slide > 0) return;
+  const say = '告诉叔叔，国外闭源大模型在哪里', size = 18;
+  ctx.font = `bold ${size}px ${FONT}`;
+  const tipX = x + 6, tipY = y + h * 0.35;  // 气泡尾巴指向画面里的他
+  const bw = ctx.measureText(say).width + 28, bh = 40, bx = tipX - 22 - bw, by = tipY - bh * 0.7;
+  ctx.fillStyle = 'rgba(255, 255, 255, .95)';
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 14);
+  ctx.moveTo(bx + bw - 6, by + bh * 0.35);
+  ctx.lineTo(tipX, tipY);
+  ctx.lineTo(bx + bw - 6, by + bh * 0.75);
+  ctx.fill();
+  text(say, bx + bw / 2, by + bh / 2, size, '#1a2340', 'center', 'bold');
+}
+
+// DeepSeek 娘站在城墙上：思考时头顶显示"已深度思考 X 秒"，发射后挥手；鲸鱼从她这里飞向目标
+function drawDeepseek(t) {
+  const st = game.ds, { x, foot, h } = dsSpot();
+  if (st.think > 0 || st.show > 0) {
+    drawSprite(st.think > 0 ? 'ds-think' : 'ds-wave', x, foot, h, t, { alpha: st.think > 0 ? 1 : Math.min(1, st.show / 0.4) });
+  }
+  if (st.think > 0) {  // 头顶的深色小标签，像 DeepSeek 网页上的"已深度思考"
+    const s = Math.floor(st.think), tip = st.think >= DS.busyAt - 2 ? ['再想就服务器繁忙了！', '#ff8a7a']
+      : st.think >= DS.maxDmg ? ['想好了！专注降下来就发射', '#7dffa0'] : null;
+    [[`已深度思考 ${s} 秒（${Math.min(DS.maxDmg, s)} 点）`, '#9cc1ff'], tip].filter(Boolean).forEach(([str, color], i) => {
+      const y = foot - h - 16 - i * 30;
+      ctx.font = `bold 15px ${FONT}`;
+      const w = ctx.measureText(str).width + 20;
+      ctx.fillStyle = 'rgba(8, 14, 34, .85)';
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2, y - 13, w, 26, 13);
+      ctx.fill();
+      text(str, x, y, 15, color, 'center', 'bold');
+    });
+  }
+  for (const wh of game.whales) {
+    const k = Math.min(1, wh.t), tx = wh.m.x * W, ty = L.groundY - monH(wh.m) * 0.5;
+    const wx = wh.sx + (tx - wh.sx) * k, wy = wh.sy + (ty - wh.sy) * k - Math.sin(k * Math.PI) * L.unit * 4, wh2 = L.unit * 3.2;
+    drawSprite('whale-swim', wx, wy + wh2 / 2, wh2, t, { flip: true, rot: Math.cos(k * Math.PI) * -0.35 });
+  }
+}
+
+// 龙息时全屏泛起火光
+function drawBreath(f) {
+  ctx.fillStyle = `rgba(255, 120, 30, ${0.2 * Math.sin(Math.PI * Math.min(1, f.t / f.dur))})`;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// Claude 娘治愈：天上落下光柱，地面一圈圈光环，城堡上方转着 Claude 标志那样的橙色光芒；上限 +5 时罩上金色护盾
+function drawHeal(f) {
+  const u = L.unit, env = fxEnv(f, 0.25, 0.7), cx = L.castleX + L.castleW / 2, w = L.castleW * 1.2;
+  const g = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
+  g.addColorStop(0, 'rgba(255, 220, 160, 0)');
+  g.addColorStop(0.35, `rgba(255, 235, 190, ${0.2 * env})`);
+  g.addColorStop(0.5, `rgba(255, 250, 225, ${0.45 * env})`);
+  g.addColorStop(0.65, `rgba(255, 235, 190, ${0.2 * env})`);
+  g.addColorStop(1, 'rgba(255, 220, 160, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - w / 2, 0, w, L.groundY);
+  ctx.lineWidth = 3;
+  for (let k = 0; k < 2; k++) {
+    const p = frac(f.t * 0.9 + k * 0.5);
+    ctx.strokeStyle = `rgba(150, 255, 170, ${(1 - p) * 0.8 * env})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, L.groundY, w * (0.3 + p * 0.5), u * (0.6 + p * 0.8), 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (f.big) {
+    const k = Math.min(1, f.t / 0.4), rx = L.castleW * 0.72 * k, ry = L.castleH * 1.08 * k;
+    ctx.fillStyle = `rgba(255, 215, 110, ${0.12 * env})`;
+    ctx.strokeStyle = `rgba(255, 225, 140, ${0.85 * env})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, L.groundY, rx, ry, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  // Claude 标志：长短不一的光芒从中心放射出来
+  const r = u * 2.3 * Math.min(1, f.t / 0.3) * (1 + Math.sin(f.t * 5) * 0.04), s = helperSpot(1);
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';  // 标志用实色，不叠加
+  ctx.translate(s.x, s.foot - s.h - u * 2.2);
+  ctx.rotate(f.t * 0.9);
+  ctx.globalAlpha = env;
+  ctx.fillStyle = '#d97757';
+  ctx.shadowColor = 'rgba(255, 200, 160, .9)';
+  ctx.shadowBlur = 18;
+  ctx.beginPath();
+  for (let i = 0; i < 12; i++) {
+    const len = r * (0.55 + 0.45 * frac(i * 0.618 * 3));
+    ctx.rotate(Math.PI / 6);
+    ctx.roundRect(-r * 0.07, -len, r * 0.14, len, r * 0.07);
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+// Gemini 猫娘登场：她身上炸开一颗大四角星
+function drawGeminiCall(f) {
+  const s = helperSpot(2), k = Math.min(1, f.t / 0.5), r = L.unit * 3.2 * (0.4 + k * 0.8);
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1 - k;
+  ctx.translate(s.x, s.foot - s.h * 0.55);
+  ctx.rotate(k * 1.2);
+  sparklePath(ctx, 0, 0, r);
+  ctx.fillStyle = geminiGradient(ctx, 0, 0, r);
+  ctx.fill();
+  ctx.restore();
+}
+
+const FX_DRAW = { breath: drawBreath, heal: drawHeal, gemini: drawGeminiCall };
+
+function drawGlows() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const g of game.glows) {
+    ctx.globalAlpha = Math.min(1, g.life * 1.5) * (g.alpha ?? 1);
+    if (!g.spin) ctx.drawImage(TEX[g.tex], g.x - g.r, g.y - g.r, g.r * 2, g.r * 2);
+    else {
+      ctx.save();
+      ctx.translate(g.x, g.y);
+      ctx.rotate(g.rot);
+      ctx.drawImage(TEX[g.tex], -g.r, -g.r, g.r * 2, g.r * 2);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+function drawEffects() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of game.fx) FX_DRAW[f.kind]?.(f);
+  ctx.restore();
+  drawGlows();
+  ctx.save();
+  ctx.lineJoin = 'round';
+  for (const b of game.bolts) {
+    ctx.globalAlpha = Math.max(0, b.life);
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 5;
+    poly(b.pts);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    poly(b.pts);
+    ctx.stroke();
+  }
+  ctx.restore();
+  for (const p of game.particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    circle(p.x, p.y, p.r);
+  }
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, .7)';
+  ctx.shadowBlur = 4;
+  for (const f of game.floaters) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.5));
+    text(f.text, f.x, f.y, f.size, f.color, 'center', 'bold');
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawHud() {
+  const pw = 380;
+  panel(16, 16, pw, 140);
+  text(CHAPTERS[game.chapter].title, 32, 34, 13, '#b8c4e0');
+  text(stageLabel(), 32, 54, 18, '#fff', 'left', 'bold');
+  text(`剩余 ${game.queue.length + game.monsters.length} 只 · 击杀 ${game.kills}`, pw, 54, 14, '#dfe6f5', 'right');
+  const hp = game.wallHp / game.wallMax;
+  text('城墙', 32, 80, 14, '#dfe6f5');
+  bar(76, 73, 240, 14, hp, hp > 0.5 ? '#5be37d' : hp > 0.25 ? '#ffb347' : '#ff5d5d');
+  text(`${Math.ceil(game.wallHp)}/${game.wallMax}`, pw, 80, 14, '#fff', 'right');
+  text('充能', 32, 104, 14, '#dfe6f5');
+  const cap = chargeCap();
+  bar(76, 97, 240, 14, game.energy / cap, game.jam ? '#888' : '#7fd8ff');
+  ctx.fillStyle = 'rgba(8, 14, 34, .9)';
+  for (let i = 1; i < cap; i++) ctx.fillRect(76 + (240 * i) / cap - 1, 97, 2, 14);
+  text(`${Math.floor(game.energy)}/${cap} 格`, pw, 104, 14, '#fff', 'right');
+  const sps = secondsPerShot(game.att);
+  const status = game.jam ? [`服务器繁忙：法杖停机 ${Math.ceil(game.jam)} 秒`, '#ff8a7a']
+    : game.boost ? [`Gemini 加持：每道闪电只耗 ${boltCost(game.att)} 格（${Math.ceil(game.boost)} 秒）`, '#ffb3ff']
+    : chargeMul() < 1 ? ['奶蛙笑场：法师也笑了，充能速度减半', '#ffd34d']
+    : sps > 30 ? [`专注 ${Math.round(game.att)}：太低了，几乎不充能`, '#ffb4a8']
+    : [`专注 ${Math.round(game.att)}：每 ${sps.toFixed(1)} 秒一道闪电`, '#7fd8ff'];
+  text(status[0], 32, 128, 14, status[1]);
+  if (game.med >= RELAX_AT && game.wallHp < game.wallMax) {
+    text(`松弛感拉满，修墙 +${(((game.med - RELAX_AT) / (100 - RELAX_AT)) * REPAIR_RATE).toFixed(1)}/秒`, 32, 146, 13, '#7dffa0');
+  }
+
+  const w = 320, x = W - 16 - w, hy = source === 'demo' ? 120 : 96;
+  panel(x, hy, w, 30 + (HELPERS.length + 1) * 22);
+  const blocked = blockade();
+  text(blocked ? '援军（AI 娘）· 国外模型已被封锁' : '援军（AI 娘）', x + 16, hy + 16, 13, blocked ? '#ff8a7a' : '#ffd6f5', 'left', 'bold');
+  HELPERS.forEach((h, i) => {
+    const st = game.helpers[h.key], y = hy + 38 + i * 22;
+    text(h.name, x + 16, y, 13, '#fff');
+    if (blocked && h.blocked) return text(h.blocked, x + w - 12, y, 12, '#ff8a7a', 'right');  // 长提示占掉进度条的位置
+    bar(x + 108, y - 5, 90, 10, st.cd > 0 ? 1 - st.cd / HELPER_CD : st.hold / h.hold, st.cd > 0 || blocked ? '#666' : '#ff9ad5');
+    text(st.cd > 0 ? `冷却 ${Math.ceil(st.cd)}s` : blocked ? '已封锁' : h.cond, x + w - 12, y, 12, blocked ? '#ff8a7a' : '#b8c4e0', 'right');
+  });
+  const ds = game.ds, dy = hy + 38 + HELPERS.length * 22;
+  text('DeepSeek 娘', x + 16, dy, 13, dsJoined() ? '#fff' : '#8a93ab');
+  if (!dsJoined()) text('打败蓝色大肥鱼后加入', x + w - 12, dy, 12, '#8a93ab', 'right');
+  else if (blocked) text('本人正在当 Boss', x + w - 12, dy, 12, '#ff8a7a', 'right');
+  else {
+    bar(x + 108, dy - 5, 90, 10, ds.cd > 0 ? 1 - ds.cd / HELPER_CD : ds.think / DS.maxDmg, ds.cd > 0 ? '#666' : '#4d6bfe');
+    text(ds.cd > 0 ? `冷却 ${Math.ceil(ds.cd)}s` : ds.think > 0 ? `已思考 ${Math.floor(ds.think)} 秒` : `专注 ≥ ${DS.thinkAt} 开始思考`,
+      x + w - 12, dy, 12, '#b8c4e0', 'right');
+  }
+
+  panel(x, 16, w, source === 'demo' ? 96 : 72);
+  text(`专注 ${signal.attention ?? '--'}`, x + 16, 38, 18, '#7fd8ff', 'left', 'bold');
+  text(`放松（松弛感）${signal.meditation ?? '--'}`, x + 130, 38, 18, '#7dffa0', 'left', 'bold');
+  const q = signal.quality;
+  const [qText, qColor] = q === undefined ? ['等待数据', '#aab4cc'] : q < POOR_SIGNAL ? [`良好（${q}）`, '#5be37d'] : [`差（${q}）`, '#ff6b5b'];
+  ctx.fillStyle = qColor;
+  circle(x + 22, 64, 6);
+  text(`信号 ${qText}`, x + 36, 64, 15);
+  if (source === 'demo') text('模拟：↑↓ 调专注，←→ 调放松，Q 脱落', x + 16, 90, 13, '#b8c4e0');
+  text('Esc 结束并查看结果', W - 16, H - 18, 13, 'rgba(255, 255, 255, .75)', 'right');
+}
+
+function drawBossBar(m) {
+  const b = BOSSES[m.boss], gap = W - 32 - 380 - 320, w = Math.min(520, gap - 40), x = 16 + 380 + (gap - w) / 2, y = 26;
+  const tr = m.trial && b.trials[m.trial.kind];
+  panel(x - 14, y - 10, w + 28, tr ? 100 : 54);
+  text(`Boss · ${b.name}`, x, y + 4, 16, '#ffd34d', 'left', 'bold');
+  text(`${Math.max(0, m.hp)} / ${m.maxHp}`, x + w, y + 4, 14, '#fff', 'right');
+  bar(x, y + 18, w, 12, m.hp / m.maxHp, '#ff5d5d');
+  if (!tr) return;
+  const t = trialRule(m);
+  const title = m.boss === 'dsgirl' ? `${tr.title}（已深度思考 ${m.trial.time.toFixed(0)} 秒）` : tr.title;
+  text(title, x, y + 46, 15, '#ffd34d', 'left', 'bold');
+  if (t.limit) text(`还剩 ${Math.max(0, t.limit - m.trial.time).toFixed(1)} 秒`, x + w, y + 46, 14, '#ff8a7a', 'right');
+  text(tr.hint, x, y + 66, 13, '#dfe6f5');
+  bar(x, y + 80, w, 8, m.trial.progress / t.need, '#7dffa0');
+}
+
+function drawSuspended() {
+  const w = Math.min(560, W - 40), x = (W - w) / 2, pad = 24, size = 16, lines = [];
+  ctx.font = `${size}px ${FONT}`;
+  for (const para of SUSPENDED) {  // 按单词折行，段落之间空一行
+    let line = '';
+    for (const word of para.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > w - pad * 2) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    }
+    lines.push(line, '');
+  }
+  lines.pop();
+  const h = pad * 2 + 44 + lines.length * 24, y = H * 0.2;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, game.suspended / 0.4, (SUSPENDED_SHOW - game.suspended) / 0.25);
+  ctx.fillStyle = '#faf9f5';
+  ctx.strokeStyle = '#d9d4c7';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 14);
+  ctx.fill();
+  ctx.stroke();
+  text('Your account has been suspended', x + pad, y + pad + 12, 22, '#141413', 'left', 'bold');
+  lines.forEach((s, i) => text(s, x + pad, y + pad + 56 + i * 24, size, '#3d3929'));
+  ctx.restore();
+}
+
+function drawBanner() {
+  const t = game.bannerTime;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, t / 0.3, (3 - t) / 0.5));
+  ctx.shadowColor = 'rgba(0, 0, 0, .7)';
+  ctx.shadowBlur = 8;
+  text(game.banner, W / 2, H * 0.36, 44, '#ffd34d', 'center', 'bold');
+  text(game.bannerSub, W / 2, H * 0.36 + 50, 20, '#fff', 'center');
+  ctx.restore();
+}
+
+function draw(t) {
+  if (game.phase !== 'menu' && game.chapter >= 0 && game.chapter !== scene.chapter) {
+    Object.assign(scene, { prev: scene.chapter, chapter: game.chapter, fade: 0 });
+  }
+  ctx.fillStyle = '#0b1020';
+  ctx.fillRect(0, 0, W, H);
+  if (scene.fade < 1) drawBg(scene.prev, 1);
+  drawBg(scene.chapter, scene.fade);
+  ctx.save();
+  const quake = Math.max(game.shake, game.quake);
+  if (quake > 0) ctx.translate((Math.random() - 0.5) * quake * 20, 0);
+  drawWizard(t);
+  drawCastle();
+  ctx.restore();
+  if (game.phase === 'menu') return;
+  const rx = boltRange() * W;
+  if (rx < W) {  // 射程覆盖全屏后就不画射程线了
+    ctx.save();
+    ctx.setLineDash([8, 8]);
+    ctx.strokeStyle = 'rgba(127, 216, 255, .55)';
+    ctx.lineWidth = 2;
+    poly([[rx, L.groundY - L.unit * 3], [rx, L.groundY + L.unit * 1.2]]);
+    ctx.stroke();
+    ctx.restore();
+    text('闪电射程', rx, L.groundY + L.unit * 1.8, 13, 'rgba(200, 235, 255, .9)', 'center');
+  }
+  for (const m of [...game.monsters].sort((a, b) => b.x - a.x)) drawMonster(m);
+  drawLiang(t);  // 画在天上，盖在怪物上面也挡不到地面上的怪
+  drawHelpers(t);
+  drawDeepseek(t);
+  drawEffects();
+  drawHud();
+  const boss = game.monsters.find(m => m.type === 'boss');
+  if (boss) drawBossBar(boss);
+  if (game.phase === 'playing' && game.bannerTime < 3) drawBanner();
+  if (game.suspended > 0) drawSuspended();
+}
+
+// --- 启动 ---
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  update(dt, now);
+  draw(now / 1000);
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', resize);
+addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key.startsWith('Arrow')) e.preventDefault();
+  if (source === 'demo' && !e.repeat && e.key.toLowerCase() === 'q') demo.off = !demo.off;
+  if (!e.repeat && e.key.toLowerCase() === 'm') setSound(!sound.on);
+  if (e.key === 'Escape' && (game.phase === 'playing' || game.phase === 'paused')) finishGame(false);
+});
+addEventListener('keyup', e => { keys[e.key] = false; });
+$('btnDevice').onclick = () => connectDevice();
+$('btnDemo').onclick = () => startDemo();
+$('btnPauseMenu').onclick = () => returnToMenu();
+$('btnAgain').onclick = () => returnToMenu();
+$('btnCsv').onclick = () => exportCsv();
+$('btnSound').onclick = e => { setSound(!sound.on); e.currentTarget.blur(); };
+$('dudu').onended = () => $('dudu').classList.add('hidden');
+
+resize();
+makeTextures();
+requestAnimationFrame(frame);
+loadAssets().then(() => {
+  // 城墙被撞时的红色闪光、治愈时的绿光：只染城堡本身的像素
+  const tint = color => {
+    const c = SPR.castle, out = document.createElement('canvas'), g = out.getContext('2d');
+    out.width = c.w;
+    out.height = c.h;
+    g.drawImage(c.img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = color;
+    g.fillRect(0, 0, c.w, c.h);
+    return out;
+  };
+  scene.castleRed = tint('rgb(255, 60, 60)');
+  scene.castleGreen = tint('rgb(110, 255, 150)');
+  assetsReady = true;
+  Object.keys(SAMPLES).forEach(pool);
+  resize();
+  $('btnDevice').disabled = $('btnDemo').disabled = false;
+  menuMsg('serial' in navigator ? '' : '当前浏览器不支持串口（Firefox 不行），请用 Edge 或 Chrome 打开；也可以先试模拟模式。');
+}).catch(e => menuMsg(`素材加载失败：${e.message}。请确认 assets 文件夹和本文件放在一起。`));
+</script>
+</body>
+</html>

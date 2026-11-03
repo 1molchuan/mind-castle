@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>脑波动作识别测试</title>
+<style>
+  body { margin: 0; background: #0f1630; color: #fff; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  h1 { margin: 0 0 4px; }
+  .sub { color: #b8c4e0; margin: 0 0 18px; }
+  .box { background: #18234a; border-radius: 14px; padding: 18px 22px; margin-bottom: 16px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  select, button { font: inherit; border: 0; border-radius: 8px; padding: 8px 14px; }
+  button { background: #f5b83d; color: #222; font-weight: bold; cursor: pointer; }
+  button.secondary { background: #4b5d85; color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+  .bands { display: grid; grid-template-columns: 80px 1fr 90px; gap: 6px 10px; align-items: center; font-size: 14px; }
+  .bar { height: 12px; background: rgba(255, 255, 255, .12); border-radius: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: #7fd8ff; transition: width .4s; }
+  #cue { font-size: 40px; font-weight: bold; text-align: center; margin: 10px 0; min-height: 1.4em; }
+  #cue.action { color: #ffd34d; }
+  #count { text-align: center; font-size: 20px; color: #dfe6f5; min-height: 1.5em; }
+  .progress { height: 10px; background: rgba(255, 255, 255, .12); border-radius: 5px; overflow: hidden; margin-top: 12px; }
+  .progress i { display: block; height: 100%; width: 0; background: #f5b83d; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, .12); text-align: center; }
+  td.hi { color: #5be37d; font-weight: bold; }
+  td.lo { color: #7fb8ff; font-weight: bold; }
+  .msg { color: #ffb4a8; }
+  .hint { color: #b8c4e0; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>脑波动作识别测试</h1>
+  <p class="sub">大约 3 分钟。按屏幕上的提示做动作，每换一步会“叮”一声。测完把数据导出给我分析。</p>
+
+  <div class="box">
+    <div class="row">
+      波特率 <select id="baud"><option>9600</option><option>57600</option><option>115200</option></select>
+      <button id="btnConnect">连接脑波设备</button>
+      <button id="btnDemo" class="secondary">模拟数据（测试用）</button>
+      <span class="msg" id="msg"></span>
+    </div>
+    <p id="status">未连接。先关掉串口助手、调试软件和游戏页面，再点“连接脑波设备”，弹窗里选 “USB-SERIAL CH340”。</p>
+    <div class="bands" id="bands"></div>
+  </div>
+
+  <div class="box">
+    <div id="cue">连接设备、信号良好后点“开始测试”</div>
+    <div id="count"></div>
+    <div class="progress"><i id="progress"></i></div>
+    <div class="row" style="justify-content: center; margin-top: 16px">
+      <button id="btnStart" disabled>开始测试</button>
+      <button id="btnStop" class="secondary" disabled>中止</button>
+    </div>
+    <p class="hint">测试中头尽量别动，只做提示的动作。闭眼那一步听到“叮”声再睁眼。</p>
+  </div>
+
+  <div class="box" id="resultBox" hidden>
+    <h2 style="margin-top: 0">结果</h2>
+    <p class="hint">表里的数字 = 做该动作时的频段能量 ÷ 静坐时的能量（都取中位数）。
+      <span style="color: #5be37d">绿色</span> = 明显变大（≥ 3 倍），<span style="color: #7fb8ff">蓝色</span> = 明显变小（≤ 0.5 倍）。</p>
+    <table id="result"></table>
+    <div class="row" style="margin-top: 14px">
+      <button id="btnCsv">导出数据 CSV</button>
+      <span class="hint">测试结束时会自动导出一次。导出后告诉我，我从“下载”文件夹里取文件来分析。</span>
+    </div>
+  </div>
+</main>
+
+<script>
+'use strict';
+
+// --- TGAM 协议解析 ---
+// 包格式：AA AA | 负载长度(≤169) | 负载 | 校验（负载字节和取反后的低 8 位）
+// 负载数据项：0x02 信号质量，0x04 专注度，0x05 放松度，0x80 原始波形，0x83 八个频段能量（8×3 字节，大端）
+function parsePayload(p) {
+  const out = {};
+  let i = 0;
+  while (i < p.length) {
+    while (p[i] === 0x55) i++;
+    const code = p[i++];
+    if (code >= 0x80) {
+      const n = p[i++];
+      if (code === 0x83 && n === 24) {
+        out.bands = [];
+        for (let k = i; k < i + 24; k += 3) out.bands.push((p[k] << 16) | (p[k + 1] << 8) | p[k + 2]);
+      }
+      i += n;
+    } else {
+      const v = p[i++];
+      if (code === 0x02) out.quality = v;
+      else if (code === 0x04) out.attention = v;
+      else if (code === 0x05) out.meditation = v;
+    }
+  }
+  return out;
+}
+
+function createParser(onPacket) {
+  let state = 0, len = 0, sum = 0, payload = [];
+  return bytes => {
+    for (const b of bytes) {
+      if (state === 0) state = b === 0xAA ? 1 : 0;
+      else if (state === 1) state = b === 0xAA ? 2 : 0;
+      else if (state === 2) {
+        if (b === 0xAA) continue;
+        if (b > 169) { state = 0; continue; }
+        len = b; sum = 0; payload = [];
+        state = len ? 3 : 4;
+      } else if (state === 3) {
+        payload.push(b);
+        sum += b;
+        if (payload.length === len) state = 4;
+      } else {
+        if ((~sum & 0xFF) === b) onPacket(parsePayload(payload));
+        state = 0;
+      }
+    }
+  };
+}
+
+// --- 数据来源 ---
+const POOR_SIGNAL = 50;  // 信号质量 ≥ 该值视为接触不良（200 = 电极没接触）
+const BAND_KEYS = ['delta', 'theta', 'lowAlpha', 'highAlpha', 'lowBeta', 'highBeta', 'lowGamma', 'midGamma'];
+const BAND_NAMES = ['Delta', 'Theta', '低 Alpha', '高 Alpha', '低 Beta', '高 Beta', '低 Gamma', '中 Gamma'];
+
+const $ = id => document.getElementById(id);
+const signal = { quality: undefined, attention: undefined, meditation: undefined, bands: null };
+let source = null;  // 'device' | 'demo'
+let port = null, reader = null;
+const demo = { timer: 0 };
+
+function handlePacket(pk, from) {
+  if (from !== source) return;
+  // 57600 模式下每秒还有 512 个只含原始波形的小包，这里只用汇总包
+  if (pk.quality === undefined && pk.attention === undefined && pk.meditation === undefined) return;
+  Object.assign(signal, pk);
+  updateLive();
+  if (run.active) record();
+}
+
+async function connectDevice() {
+  if (!('serial' in navigator)) return ($('msg').textContent = '当前浏览器不支持串口，请用 Edge 或 Chrome 打开本文件。');
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: Number($('baud').value) });
+  } catch (e) {
+    port = null;
+    $('msg').textContent = e.name === 'NotFoundError' ? '没有选择串口。' : `打开串口失败：${e.message}。请确认其他程序没有占用串口。`;
+    return;
+  }
+  readLoop(port);
+  sourceReady('device', '脑波设备');
+}
+
+async function readLoop(p) {
+  const parse = createParser(pk => handlePacket(pk, 'device'));
+  while (p.readable) {
+    reader = p.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        parse(value);
+      }
+    } catch (e) {
+      // 帧错误等可恢复错误会换一个新的 readable，继续读；拔掉设备时 readable 变成 null，循环结束
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
+// 模拟数据：按当前步骤放大对应频段，只用来检查页面流程
+function startDemo() {
+  const factors = {
+    clench: [1, 1, 1, 1, 1.5, 4, 10, 12], blink: [6, 3, 1.5, 1, 1, 1, 1, 1], brow: [1, 1, 1, 1, 1.3, 2.5, 5, 6],
+    eyes: [1, 1.2, 2.5, 2.2, 1, 1, 1, 1], math: [1, 1, 1, 1, 1.4, 1.6, 1.2, 1.2],
+  };
+  const base = [400000, 120000, 30000, 25000, 20000, 18000, 8000, 5000];
+  clearInterval(demo.timer);
+  demo.timer = setInterval(() => {
+    const key = run.active ? STEPS[run.index].key : 'rest';
+    const f = factors[key] || base.map(() => 1);
+    handlePacket({
+      quality: 0,
+      attention: Math.round((key === 'math' ? 70 : 45) + (Math.random() - 0.5) * 20),
+      meditation: Math.round((key === 'eyes' ? 75 : 50) + (Math.random() - 0.5) * 20),
+      bands: base.map((b, i) => Math.round(b * f[i] * (0.6 + Math.random() * 0.8))),
+    }, 'demo');
+  }, 1000);
+  sourceReady('demo', '模拟数据');
+}
+
+// --- 测试流程 ---
+const GAP = { key: 'gap', text: '松开，放松', sec: 6 };
+const trials = (n, step) => Array.from({ length: n }, () => [step, GAP]).flat();
+const STEPS = [
+  { key: 'ready', text: '准备……', sec: 3 },
+  { key: 'rest', text: '静坐，睁眼看屏幕，全身放松', sec: 20 },
+  ...trials(3, { key: 'clench', text: '用力咬紧牙齿', sec: 4 }),
+  ...trials(3, { key: 'blink', text: '用力连续眨眼', sec: 4 }),
+  ...trials(3, { key: 'brow', text: '用力抬起眉毛', sec: 4 }),
+  { key: 'eyes', text: '闭上眼睛放松，听到“叮”再睁开', sec: 15 },
+  { key: 'gap', text: '睁开眼睛，放松', sec: 8 },
+  { key: 'math', text: '心算：从 1000 开始连续减 7', sec: 20 },
+  { key: 'gap', text: '停下来，放松', sec: 8 },
+];
+const CONDITIONS = [['clench', '咬牙'], ['blink', '用力眨眼'], ['brow', '抬眉'], ['eyes', '闭眼'], ['math', '心算']];
+const ACTIONS = new Set(CONDITIONS.map(c => c[0]));
+const TOTAL_SEC = STEPS.reduce((s, x) => s + x.sec, 0);
+const LAG_MS = 1000;  // 每秒一个数据包，反映的大约是上一秒的状态，统计时按 1 秒延迟对齐步骤
+
+const run = { active: false, index: -1, stepAt: 0, startedAt: 0, changes: [], rows: [], timer: 0 };
+let audio = null;
+
+const fmt = v => (!Number.isFinite(v) ? '--' : v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(Math.round(v)));
+const median = a => {
+  const s = [...a].sort((x, y) => x - y), m = s.length >> 1;
+  return !s.length ? NaN : s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const mean = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
+
+function timestamp() {
+  const d = new Date(), p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+}
+
+function beep(freq) {
+  if (!audio) return;
+  const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.25, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  o.connect(g).connect(audio.destination);
+  o.start(t);
+  o.stop(t + 0.4);
+}
+
+function sourceReady(src, label) {
+  source = src;
+  $('btnConnect').disabled = $('btnDemo').disabled = true;
+  $('btnStart').disabled = false;
+  $('msg').textContent = '';
+  $('status').textContent = `${label}已连接，等待数据……`;
+}
+
+function updateLive() {
+  const q = signal.quality;
+  const [qText, qColor] = q === undefined ? ['等待数据', '#aab4cc'] : q < POOR_SIGNAL ? [`良好（${q}）`, '#5be37d'] : [`差（${q}），请调整电极`, '#ff6b5b'];
+  $('status').innerHTML = `信号 <b style="color: ${qColor}">${qText}</b> · 专注 <b>${signal.attention ?? '--'}</b> · 放松 <b>${signal.meditation ?? '--'}</b>`;
+  if (!signal.bands) return;
+  signal.bands.forEach((v, i) => {
+    $('bar' + i).style.width = `${Math.max(0, Math.min(100, ((Math.log10(v + 1) - 2) / 5) * 100))}%`;
+    $('val' + i).textContent = fmt(v);
+  });
+}
+
+function startRun() {
+  if (signal.quality === undefined || signal.quality >= POOR_SIGNAL) {
+    $('msg').textContent = '信号还不好：先用湿纸巾擦额头和耳垂、夹紧耳夹，等信号显示“良好”再开始。';
+    return;
+  }
+  audio = audio || new AudioContext();
+  Object.assign(run, { active: true, index: -1, startedAt: performance.now(), changes: [], rows: [] });
+  $('btnStart').disabled = true;
+  $('btnStop').disabled = false;
+  $('resultBox').hidden = true;
+  $('msg').textContent = '';
+  nextStep();
+  run.timer = setInterval(tick, 100);
+}
+
+function nextStep() {
+  run.index++;
+  if (run.index >= STEPS.length) return finishRun(false);
+  const s = STEPS[run.index];
+  run.stepAt = performance.now();
+  run.changes.push({ at: run.stepAt, key: s.key });
+  $('cue').textContent = s.text;
+  $('cue').className = ACTIONS.has(s.key) ? 'action' : '';
+  beep(ACTIONS.has(s.key) ? 880 : 520);
+  tick();
+}
+
+function tick() {
+  const s = STEPS[run.index], left = s.sec - (performance.now() - run.stepAt) / 1000;
+  if (left <= 0) return nextStep();
+  const done = STEPS.slice(0, run.index).reduce((a, x) => a + x.sec, 0) + (s.sec - left);
+  $('count').textContent = `还剩 ${Math.ceil(left)} 秒 · 第 ${run.index + 1} / ${STEPS.length} 步`;
+  $('progress').style.width = `${(done / TOTAL_SEC) * 100}%`;
+}
+
+function finishRun(aborted) {
+  clearInterval(run.timer);
+  run.active = false;
+  beep(660);
+  $('cue').textContent = aborted ? '已中止' : '测试完成！';
+  $('cue').className = '';
+  $('count').textContent = '';
+  if (!aborted) $('progress').style.width = '100%';
+  $('btnStart').disabled = false;
+  $('btnStop').disabled = true;
+  showSummary();
+  if (run.rows.length) exportCsv();
+}
+
+// 某一时刻正在进行的步骤
+function keyAt(ts) {
+  let key = 'ready';
+  for (const c of run.changes) if (c.at <= ts) key = c.key;
+  return key;
+}
+
+function record() {
+  const now = performance.now();
+  const row = {
+    time: timestamp(), t: +((now - run.startedAt) / 1000).toFixed(2), step: run.index + 1,
+    cue: STEPS[run.index].key, aligned: keyAt(now - LAG_MS),
+    quality: signal.quality, attention: signal.attention, meditation: signal.meditation,
+  };
+  BAND_KEYS.forEach((k, i) => { row[k] = signal.bands ? signal.bands[i] : ''; });
+  run.rows.push(row);
+}
+
+function showSummary() {
+  const rowsOf = key => run.rows.filter(r => r.aligned === key);
+  const base = rowsOf('rest').slice(3);  // 跳过刚坐定的前几秒
+  const baseMed = BAND_KEYS.map(k => median(base.map(r => r[k])));
+  const tail = rows => {
+    const q = median(rows.map(r => r.quality));
+    return `<td>${fmt(mean(rows.map(r => r.attention)))}</td><td>${fmt(mean(rows.map(r => r.meditation)))}</td><td>${fmt(q)}</td>`;
+  };
+  let html = `<tr><th>动作</th><th>样本</th>${BAND_NAMES.map(n => `<th>${n}</th>`).join('')}<th>专注</th><th>放松</th><th>信号质量</th></tr>`;
+  html += `<tr><td>静坐（基线）</td><td>${base.length}</td>${baseMed.map(v => `<td>${fmt(v)}</td>`).join('')}${tail(base)}</tr>`;
+  for (const [key, name] of CONDITIONS) {
+    const rows = rowsOf(key);
+    const cells = BAND_KEYS.map((k, i) => {
+      const r = median(rows.map(x => x[k])) / baseMed[i];
+      if (!Number.isFinite(r)) return '<td>--</td>';
+      return `<td class="${r >= 3 ? 'hi' : r <= 0.5 ? 'lo' : ''}">×${r.toFixed(1)}</td>`;
+    }).join('');
+    html += `<tr><td>${name}</td><td>${rows.length}</td>${cells}${tail(rows)}</tr>`;
+  }
+  $('result').innerHTML = html;
+  $('resultBox').hidden = false;
+}
+
+function exportCsv() {
+  const cols = Object.keys(run.rows[0]);
+  const lines = [cols.join(','), ...run.rows.map(r => cols.map(c => r[c] ?? '').join(','))];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv' }));
+  a.download = `脑波动作测试-${run.rows[0].time.slice(0, 19).replace(/[: ]/g, '-')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// --- 启动 ---
+$('bands').innerHTML = BAND_NAMES.map((n, i) =>
+  `<span>${n}</span><div class="bar"><i id="bar${i}"></i></div><span id="val${i}">--</span>`).join('');
+$('btnConnect').onclick = () => connectDevice();
+$('btnDemo').onclick = () => startDemo();
+$('btnStart').onclick = () => startRun();
+$('btnStop').onclick = () => finishRun(true);
+$('btnCsv').onclick = () => run.rows.length && exportCsv();
+if (!('serial' in navigator)) $('msg').textContent = '当前浏览器不支持串口（Firefox 不行），请用 Edge 或 Chrome 打开。';
+</script>
+</body>
+</html>
